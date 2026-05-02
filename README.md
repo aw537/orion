@@ -451,11 +451,3 @@ Key endpoint groups:
 | `/api/v1/synthesize` | 2 | Knowledge synthesis |
 
 ---
-
-## Migration from v0.1
-
-See [MIGRATION.md](MIGRATION.md). Key changes:
-- MCP tool names moved from `orion_*` to `memory.*` / `brain.*` / `sun.*` namespaces
-- MCP server is now a separate service on port 8787 (was mounted on the API at port 8000)
-- All brain operations available as REST endpoints at `/api/v1/brain/*`
-- No data migration needed — all schema changes are additive
