@@ -16,11 +16,14 @@ from app.models.user import User, UserSession
 
 TOKEN_EXPIRY_HOURS = 168  # 7 days
 
+# Random fallback so there is never a guessable default in the source.
+# Sessions signed with this will not survive a restart, which is fine for
+# unauthenticated local dev. Production should set ORION_LOCAL_TOKEN.
+_EPHEMERAL_SECRET = secrets.token_urlsafe(32)
+
 
 def _get_secret() -> str:
-    s = get_settings()
-    # Use ORION_LOCAL_TOKEN as HMAC secret if set, otherwise a stable default for dev
-    return s.ORION_LOCAL_TOKEN or "orion-dev-secret-change-in-production"
+    return get_settings().ORION_LOCAL_TOKEN or _EPHEMERAL_SECRET
 
 
 def hash_password(password: str) -> str:
