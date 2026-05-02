@@ -54,6 +54,8 @@ export default function OnboardingView() {
   const [toolInput, setToolInput] = useState('');
   const [contradictionPref, setContradictionPref] = useState(saved.contradictionPref || 'flag_and_ask');
   const [steeringDocPath, setSteeringDocPath] = useState(saved.steeringDocPath || '');
+  const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const nameRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -83,6 +85,9 @@ export default function OnboardingView() {
   }, [step, role, source, biomeName, userName, goal, tools, commStyle, contradictionPref, steeringDocPath]);
 
   const handleFinish = async () => {
+    if (loading) return;
+    setLoading(true);
+    setSubmitError('');
     try {
       const result = await apiClient.post<{ import_started: boolean }>('/api/v1/onboarding/start', {
         role: role === 'founder' ? 'Technical Founder' : role.charAt(0).toUpperCase() + role.slice(1),
@@ -99,12 +104,14 @@ export default function OnboardingView() {
       qc.invalidateQueries({ queryKey: ['galaxy'] });
       if (source !== 'empty' && importPath.trim() && !result.import_started) {
         setImportWarning(`Vault import could not start — path "${importPath}" was not accessible from the server. Your Galaxy was created, but you can re-import later from Settings.`);
-        return;
       }
       clearProgress();
       navigate('/');
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Onboarding failed:', err);
+      setSubmitError((err as Error)?.message ?? 'Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -390,14 +397,20 @@ export default function OnboardingView() {
               {importWarning && (
                 <div className="mt-4 p-3.5 rounded-lg border border-[var(--warning)] bg-[rgba(245,158,11,0.08)] text-xs text-[var(--warning)] leading-relaxed">
                   {importWarning}
-                  <button onClick={() => navigate('/')} className="ml-2 underline hover:no-underline">Go to Galaxy</button>
+                </div>
+              )}
+              {submitError && (
+                <div className="mt-4 p-3.5 rounded-lg border border-red-500/40 bg-red-500/08 text-xs text-red-400 leading-relaxed">
+                  {submitError}
                 </div>
               )}
               <div className="flex items-center justify-between mt-8">
                 <span className="text-[11px] text-[var(--text-3)] cursor-pointer hover:text-[var(--text-2)]" onClick={handleFinish}>Skip and finish</span>
                 <div className="flex gap-2.5">
                   <Button variant="ghost" onClick={() => setStep(5)}>Back</Button>
-                  <Button variant="primary" kbd="↵" onClick={handleFinish}>Open my Galaxy</Button>
+                  <Button variant="primary" kbd="↵" onClick={handleFinish} disabled={loading}>
+                    {loading ? 'Creating…' : 'Open my Galaxy'}
+                  </Button>
                 </div>
               </div>
             </>

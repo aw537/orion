@@ -19,7 +19,7 @@ export function Button({ variant = 'primary', kbd, className, children, ...props
   return (
     <button
       className={clsx(
-        'inline-flex items-center gap-2 h-8 px-3.5 rounded-lg font-body text-[13px] font-medium border cursor-pointer whitespace-nowrap transition-all duration-150 ease-expo',
+        'inline-flex items-center gap-2 h-8 px-3.5 rounded-lg font-body text-[13px] font-medium border cursor-pointer whitespace-nowrap transition-all duration-150 ease-expo disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none',
         variants[variant],
         className,
       )}

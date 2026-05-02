@@ -8,7 +8,13 @@ export const apiClient = {
   },
   async post<T = any>(path: string, body?: any): Promise<T> {
     const res = await fetch(`${BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
-    if (!res.ok) throw new Error(`POST ${path}: ${res.status}`);
+    if (!res.ok) {
+      let detail: string | undefined;
+      try { detail = (await res.json()).detail; } catch { /* ignore */ }
+      const err = new Error(detail ?? `POST ${path}: ${res.status}`) as Error & { status: number };
+      err.status = res.status;
+      throw err;
+    }
     return res.json();
   },
   async put<T = any>(path: string, body?: any): Promise<T> {

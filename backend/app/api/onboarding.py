@@ -222,12 +222,15 @@ async def start_onboarding(body: OnboardingRequest, background_tasks: Background
     # Update planet registry in Sun
     await sun_service.update_planet_registry(galaxy_id)
 
-    # Ensure Chroma collections
-    try:
-        chroma = ChromaClient(get_chroma_client())
-        chroma.ensure_collections(galaxy_id)
-    except Exception:
-        pass
+    # Ensure Chroma collections in background — sync HTTP calls should not block the response
+    def _init_chroma_collections(_galaxy_id: str = galaxy_id) -> None:
+        try:
+            chroma = ChromaClient(get_chroma_client())
+            chroma.ensure_collections(_galaxy_id)
+        except Exception:
+            pass
+
+    background_tasks.add_task(_init_chroma_collections)
 
     await nebula_service.log_event(galaxy_id=galaxy_id, action_type="SESSION_START", initiated_by="onboarding")
 
