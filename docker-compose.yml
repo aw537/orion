@@ -1,0 +1,124 @@
+version: '3.9'
+
+services:
+  orion-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: orion
+      POSTGRES_USER: orion
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-orion_dev}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orion"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  orion-api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - /Users/andreswu/Documents/Obsidian:/vault:ro
+    environment:
+      - PYTHONPATH=/app
+      - DATABASE_URL=postgresql+asyncpg://orion:${POSTGRES_PASSWORD:-orion_dev}@orion-postgres:5432/orion
+      - REDIS_URL=redis://orion-redis:6379
+      - CHROMA_URL=http://orion-chroma:8000
+      - OLLAMA_URL=http://orion-ollama:11434
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-ollama}
+      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ORION_LOCAL_TOKEN=${ORION_LOCAL_TOKEN:-}
+      - ORION_AUTH_DISABLED=true
+    depends_on:
+      orion-postgres:
+        condition: service_healthy
+      orion-redis:
+        condition: service_healthy
+      orion-chroma:
+        condition: service_healthy
+      orion-ollama:
+        condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+  orion-frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - orion-api
+
+  orion-mcp:
+    build: ./mcp
+    ports:
+      - "8787:8787"
+    environment:
+      - ORION_API_URL=http://orion-api:8000
+      - ORION_TOKEN=${ORION_LOCAL_TOKEN:-}
+      - MCP_PORT=8787
+    depends_on:
+      - orion-api
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8787/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  orion-redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  orion-chroma:
+    image: chromadb/chroma:0.5.23
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
+      - ANONYMIZED_TELEMETRY=FALSE
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  orion-ollama:
+    image: ollama/ollama:0.5.4
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    entrypoint: >
+      sh -c "ollama serve &
+             until ollama list > /dev/null 2>&1; do sleep 1; done &&
+             ollama pull nomic-embed-text &&
+             ollama pull llama3 &&
+             wait"
+
+volumes:
+  postgres_data:
+  redis_data:
+  chroma_data:
+  ollama_data:

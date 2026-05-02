@@ -1,0 +1,25 @@
+# Secrets
+.env
+
+# OS
+.DS_Store
+.localized
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+tsconfig.tsbuildinfo
+
+# Data
+data/orion.db
+data/*.db
+
+# IDE / tools
+.claude/settings.local.json
