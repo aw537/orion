@@ -1,0 +1,191 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Orion Design Tokens ─────────────────────────────────────────── */
+:root {
+  /* Background */
+  --bg: #07041A;
+
+  /* Sun */
+  --sun-core: #F59E0B;
+  --sun-glow: #FCD34D;
+
+  /* Brand violet */
+  --violet-700: #7C3AED;
+  --violet-300: #A78BFA;
+
+  /* Sky teal */
+  --teal-500: #0EA5E9;
+  --teal-400: #38BDF8;
+
+  /* Nebula */
+  --nebula: #2D1B69;
+
+  /* Semantic */
+  --active: #0EA5E9;
+  --warning: #F59E0B;
+  --dormant: #4B5563;
+  --archived: #374151;
+  --danger: #DC2626;
+
+  /* Text */
+  --text-1: #F3F0FF;
+  --text-2: #C4B5FD;
+  --text-3: #9484C2;
+
+  /* Surfaces */
+  --surface-1: rgba(45, 27, 105, 0.4);
+  --surface-2: rgba(124, 58, 237, 0.1);
+  --surface-3: rgba(255, 255, 255, 0.04);
+  --border: rgba(196, 181, 253, 0.2);
+  --border-soft: rgba(196, 181, 253, 0.22);
+
+  /* Lifecycle */
+  --seed: #22D3EE;
+  --active-state: #7C3AED;
+  --mature: #4F46E5;
+  --dormant-state: #4B5563;
+  --archived-state: #374151;
+
+  /* Cognitive regions */
+  --analytical: #7C3AED;
+  --procedural: #0EA5E9;
+  --contextual: #10B981;
+
+  /* Entity colors */
+  --entity-person: #EC4899;
+  --entity-org: #F97316;
+  --entity-tool: #14B8A6;
+  --entity-concept: #8B5CF6;
+  --entity-decision: #F59E0B;
+  --entity-code: #6EE7B7;
+
+  /* Easing */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Type */
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+}
+
+/* ── Base reset ──────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text-1);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Space backdrop ──────────────────────────────────────────────── */
+.space-backdrop {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(124, 58, 237, 0.08), transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 90%, rgba(14, 165, 233, 0.05), transparent 60%),
+    radial-gradient(ellipse 40% 40% at 70% 30%, rgba(45, 27, 105, 0.4), transparent 70%),
+    var(--bg);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(196, 181, 253, 0.15); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(196, 181, 253, 0.3); }
+
+/* ── Selection ───────────────────────────────────────────────────── */
+::selection { background: rgba(124, 58, 237, 0.4); color: #fff; }
+
+/* ── Focus ───────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 1px solid var(--violet-300);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Animations ──────────────────────────────────────────────────── */
+@keyframes twinkle {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes sun-pulse {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.04); filter: brightness(1.1); }
+}
+
+@keyframes panel-in {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes rise {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes step-in {
+  from { transform: translateY(6px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes strip-in {
+  from { transform: translateX(40px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+@keyframes seed-breathe {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+
+@keyframes spark-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+/* ── Utility: row hover ──────────────────────────────────────────── */
+.row-hover { transition: background 150ms var(--ease-out-expo); }
+.row-hover:hover { background: var(--surface-2); }
+
+/* ── Utility: divider ────────────────────────────────────────────── */
+.hr {
+  height: 1px;
+  background: var(--border-soft);
+  border: 0;
+  margin: 16px 0;
+}
+
+/* ── Reduced motion ──────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
