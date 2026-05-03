@@ -19,7 +19,7 @@ Orion gives AI agents persistent memory across sessions. It runs locally via Doc
 ### 1. Clone and start
 
 ```bash
-git clone https://github.com/useorion/orion && cd orion
+git clone https://github.com/aw537/orion && cd orion
 cp .env.example .env
 docker compose up
 ```
