@@ -113,7 +113,6 @@ orion/
 │       ├── api/          # API client and react-query hooks
 │       └── index.css     # Design tokens (CSS custom properties — single source of truth)
 ├── mcp/         # Standalone MCP server — calls backend via HTTP
-├── installer/   # npx create-orion — one-command setup
 └── docker-compose.yml
 ```
 
@@ -380,7 +379,7 @@ cd backend && alembic upgrade head
 
 ### Tech Stack
 
-**Backend:** Python 3.12, FastAPI, SQLAlchemy (async), PostgreSQL / SQLite, ChromaDB, Redis 7, APScheduler, Alembic (15 migrations)
+**Backend:** Python 3.12, FastAPI, SQLAlchemy (async), PostgreSQL / SQLite, ChromaDB, Redis 7, APScheduler, Alembic (1 migration)
 **MCP Server:** Python 3.12, FastMCP, httpx (HTTP client to backend)
 **Frontend:** React 18, Vite, TypeScript, Tailwind CSS, Zustand, TanStack Query, D3.js
 **Infrastructure:** Docker Compose — 7 services (API, MCP, frontend, PostgreSQL, Redis, ChromaDB, Ollama)
