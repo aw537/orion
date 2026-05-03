@@ -75,11 +75,41 @@ class OnboardingResponse(BaseModel):
     knowledge_gaps_count: int = 0
 
 
-@router.post("/start", response_model=OnboardingResponse, status_code=201)
+@router.post("/start", response_model=OnboardingResponse)
 async def start_onboarding(body: OnboardingRequest, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     existing = (await db.execute(select(Galaxy).limit(1))).scalar_one_or_none()
     if existing:
-        raise HTTPException(400, "Galaxy already exists. Onboarding already completed.")
+        # Galaxy already exists — trigger import if a path was provided, then return existing state
+        import_started = False
+        if body.import_path:
+            resolved = None
+            try:
+                resolved = _validate_import_path(body.import_path)
+            except Exception as e:
+                logger.warning(f"Re-import path '{body.import_path}' not accessible: {e}")
+                if body.source_type == "obsidian" and os.path.isdir("/vault"):
+                    resolved = "/vault"
+            if resolved:
+                try:
+                    first_planet = (await db.execute(
+                        select(Planet).where(Planet.galaxy_id == existing.id).limit(1)
+                    )).scalar_one_or_none()
+                    if first_planet:
+                        from app.services import import_service
+                        background_tasks.add_task(
+                            import_service.import_markdown_folder, resolved, first_planet.id, existing.id
+                        )
+                        import_started = True
+                except Exception as e:
+                    logger.error(f"Failed to schedule re-import task: {e}")
+        planets = (await db.execute(select(Planet).where(Planet.galaxy_id == existing.id))).scalars().all()
+        first_biome = (await db.execute(select(Biome).where(Biome.galaxy_id == existing.id).limit(1))).scalar_one_or_none()
+        return OnboardingResponse(
+            galaxy_id=existing.id,
+            planets=[p.name for p in planets],
+            first_biome_id=first_biome.id if first_biome else "",
+            import_started=import_started,
+        )
 
     galaxy_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).replace(tzinfo=None)

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useGalaxy } from '../api/galaxy';
 import { apiClient } from '../api/client';
@@ -16,7 +16,6 @@ import ContradictionPanel from '../components/galaxy/ContradictionPanel';
 import AgentPanel from '../components/galaxy/AgentPanel';
 import MergePanel from '../components/galaxy/MergePanel';
 import { InboxPanel } from '../components/inbox/InboxPanel';
-import OnboardingView from './OnboardingView';
 
 export default function GalaxyView() {
   const { data: galaxy, isLoading } = useGalaxy();
@@ -71,7 +70,7 @@ export default function GalaxyView() {
   }, [moreOpen]);
 
   if (isLoading) return <div className="flex items-center justify-center h-screen text-[var(--text-3)]">Loading Galaxy...</div>;
-  if (!galaxy) return <OnboardingView />;
+  if (!galaxy) return <Navigate to="/onboarding" replace />;
 
   return (
     <div className="fixed inset-0">
