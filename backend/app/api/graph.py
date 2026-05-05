@@ -1,4 +1,5 @@
 """Knowledge graph REST API endpoints."""
+from itertools import combinations
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import select, text
@@ -113,3 +114,74 @@ async def link_all(entity_id: str, galaxy: Galaxy = Depends(get_galaxy_for_user)
     count = await graph_service.link_all_unlinked(entity_id, galaxy.id, db)
     await db.commit()
     return {"entity_id": entity_id, "links_created": count}
+
+
+@router.post("/rebuild-edges")
+async def rebuild_edges(galaxy: Galaxy = Depends(get_galaxy_for_user), db: AsyncSession = Depends(get_db)):
+    """Rebuild co-occurrence edges for all entities sharing stardust records.
+
+    This creates WORKS_WITH edges between entities that co-occur in the same
+    stardust record but don't already have an explicit relationship.
+    """
+    from app.models.entity import EntityStardust
+
+    # Find all stardust records that have 2+ entities linked
+    stardust_entities = await db.execute(text("""
+        SELECT es.stardust_id, array_agg(es.entity_id) as entity_ids
+        FROM entity_stardust es
+        JOIN entities e ON e.id = es.entity_id
+        WHERE e.galaxy_id = :gid
+        GROUP BY es.stardust_id
+        HAVING COUNT(*) >= 2
+    """), {"gid": galaxy.id})
+
+    edges_created = 0
+    for row in stardust_entities:
+        m = row._mapping
+        entity_ids = m["entity_ids"]
+        stardust_id = m["stardust_id"]
+        for src, tgt in combinations(entity_ids, 2):
+            # Check if any relationship already exists between this pair
+            existing = await db.execute(text("""
+                SELECT 1 FROM entity_relationships
+                WHERE (source_entity_id = :s AND target_entity_id = :t)
+                   OR (source_entity_id = :t AND target_entity_id = :s)
+                LIMIT 1
+            """), {"s": src, "t": tgt})
+            if existing.scalar() is None:
+                await graph_service.upsert_relationship(
+                    source_id=src, target_id=tgt,
+                    rel_type="WORKS_WITH", confidence=0.5,
+                    stardust_id=stardust_id, galaxy_id=galaxy.id, db=db,
+                )
+                edges_created += 1
+
+    # Also connect entities that share the same planet (weaker signal)
+    planet_entities = await db.execute(text("""
+        SELECT planet_id, array_agg(id) as entity_ids
+        FROM entities
+        WHERE galaxy_id = :gid AND planet_id IS NOT NULL
+        GROUP BY planet_id
+        HAVING COUNT(*) >= 2
+    """), {"gid": galaxy.id})
+
+    for row in planet_entities:
+        m = row._mapping
+        entity_ids = m["entity_ids"]
+        for src, tgt in combinations(entity_ids, 2):
+            existing = await db.execute(text("""
+                SELECT 1 FROM entity_relationships
+                WHERE (source_entity_id = :s AND target_entity_id = :t)
+                   OR (source_entity_id = :t AND target_entity_id = :s)
+                LIMIT 1
+            """), {"s": src, "t": tgt})
+            if existing.scalar() is None:
+                await graph_service.upsert_relationship(
+                    source_id=src, target_id=tgt,
+                    rel_type="WORKS_WITH", confidence=0.3,
+                    stardust_id="planet-cooccurrence", galaxy_id=galaxy.id, db=db,
+                )
+                edges_created += 1
+
+    await db.commit()
+    return {"edges_created": edges_created}
