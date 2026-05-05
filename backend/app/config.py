@@ -14,7 +14,7 @@ class RegionCacheTTLs(BaseModel):
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "sqlite+aiosqlite:///./data/orion.db"
+    DATABASE_URL: str = "postgresql+asyncpg://orion:orion_dev@localhost:5432/orion"
     DATABASE_POOL_SIZE: int = 10
     DATABASE_MAX_OVERFLOW: int = 20
     DATABASE_POOL_TIMEOUT: int = 30

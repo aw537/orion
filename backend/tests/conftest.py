@@ -9,6 +9,8 @@ from httpx import AsyncClient, ASGITransport
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+# Override database URL before any app imports — tests use in-memory SQLite
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
 # Enable auth bypass for all tests — tests don't need to pass tokens
 os.environ["ORION_AUTH_DISABLED"] = "true"
 
