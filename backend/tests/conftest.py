@@ -5,6 +5,7 @@ import pytest
 import pytest_asyncio
 from unittest.mock import patch
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.pool import StaticPool
 from httpx import AsyncClient, ASGITransport
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -56,7 +57,7 @@ _SERVICE_MODULES = [
 @pytest_asyncio.fixture
 async def db():
     """In-memory SQLite async session for unit tests."""
-    engine = create_async_engine(TEST_DB_URL, echo=False, connect_args={"check_same_thread": False})
+    engine = create_async_engine(TEST_DB_URL, echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -105,7 +106,7 @@ async def seeded_galaxy(db):
 @pytest_asyncio.fixture
 async def client():
     """ASGI test client with in-memory SQLite and patched service modules."""
-    engine = create_async_engine(TEST_DB_URL, echo=False, connect_args={"check_same_thread": False})
+    engine = create_async_engine(TEST_DB_URL, echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with engine.begin() as conn:
@@ -114,6 +115,7 @@ async def client():
     async def override_get_db():
         async with factory() as session:
             yield session
+            await session.commit()
 
     active_patches = []
     for mod in _SERVICE_MODULES:
