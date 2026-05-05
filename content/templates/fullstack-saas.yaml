@@ -1,0 +1,51 @@
+name: "Full-Stack SaaS"
+description: "Web apps with a modern frontend + backend stack. Pre-configured for API design, UI components, and deployment."
+icon: "rocket"
+
+planets:
+  - name: Engineering
+    color: "#6D28D9"
+    biomes:
+      - name: "Backend API"
+      - name: "Frontend App"
+      - name: "Infrastructure"
+  - name: Product
+    color: "#F59E0B"
+    biomes:
+      - name: "Roadmap & Decisions"
+  - name: Personal
+    color: "#0EA5E9"
+
+sun:
+  principles:
+    - "Cite the specific Biome when referencing prior decisions."
+    - "Prefer concrete examples over abstract explanations."
+    - "Flag contradictions rather than silently overwriting."
+    - "When uncertain, say so explicitly with a confidence estimate."
+  write_rules:
+    - "Record architectural decisions with full rationale in the relevant Biome."
+    - "Capture error resolutions — what failed and what fixed it."
+    - "Log API contract changes with before/after examples."
+    - "Record deployment incidents and their root causes."
+  communication_style: "direct"
+
+seed_stardust:
+  - content: "Convention: API endpoints follow RESTful naming. Use plural nouns for resources."
+    region: "procedural"
+    gravity: "PLANET"
+    planet: "Engineering"
+  - content: "Convention: All database schema changes require a migration file — never modify production tables directly."
+    region: "procedural"
+    gravity: "PLANET"
+    planet: "Engineering"
+  - content: "Convention: Feature branches merge to main via PR with at least one review."
+    region: "procedural"
+    gravity: "GALAXY"
+
+entities:
+  - name: "REST API"
+    type: "concept"
+  - name: "PostgreSQL"
+    type: "tool"
+  - name: "Docker"
+    type: "tool"
