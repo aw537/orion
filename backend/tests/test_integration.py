@@ -57,8 +57,9 @@ async def test_planets_list(client):
     resp = await client.get("/api/v1/planets")
     assert resp.status_code == 200
     planets = resp.json()
-    assert len(planets) == 2
-    names = {p["name"] for p in planets}
+    standard = [p for p in planets if p["planet_type"] == "standard"]
+    assert len(standard) == 2
+    names = {p["name"] for p in standard}
     assert names == {"Engineering", "Personal"}
 
 
@@ -69,7 +70,8 @@ async def test_galaxy_status(client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["galaxy_name"]
-    assert len(data["planets"]) == 2
+    # onboarding creates 2 standard planets (role-based) + 1 inbox planet
+    assert len(data["planets"]) == 3
 
 
 @pytest.mark.asyncio

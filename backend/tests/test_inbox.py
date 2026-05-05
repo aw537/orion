@@ -256,7 +256,7 @@ async def test_planet_list_includes_planet_type(client):
     resp = await client.get("/api/v1/planets")
     assert resp.status_code == 200
     planets = resp.json()
-    # All planets from onboarding should be "standard"
+    # Onboarding creates standard planets + one inbox planet
     for p in planets:
         assert "planet_type" in p
-        assert p["planet_type"] == "standard"
+        assert p["planet_type"] in ("standard", "inbox")
