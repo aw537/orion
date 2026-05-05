@@ -23,9 +23,9 @@ def upgrade():
     op.add_column("merge_proposals",
         sa.Column("bridging_done", sa.Boolean(), nullable=False, server_default=sa.false()))
 
-    op.execute("UPDATE merge_proposals SET reconciliation_done = 1 WHERE entity_mappings_count > 0")
-    op.execute("UPDATE merge_proposals SET bridging_done = 1 WHERE bridges_created > 0")
-    op.execute("UPDATE merge_proposals SET reconciliation_done = 1, bridging_done = 1 WHERE status = 'complete'")
+    op.execute("UPDATE merge_proposals SET reconciliation_done = TRUE WHERE entity_mappings_count > 0")
+    op.execute("UPDATE merge_proposals SET bridging_done = TRUE WHERE bridges_created > 0")
+    op.execute("UPDATE merge_proposals SET reconciliation_done = TRUE, bridging_done = TRUE WHERE status = 'complete'")
 
     # ── contradictions unique pair ───────────────────────────────────
     # Remove duplicates, keeping the oldest row per canonical (min_id, max_id) pair.
