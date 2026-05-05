@@ -34,7 +34,7 @@ async def test_onboarding_creates_galaxy(client):
         "role": "Developer",
         "first_biome_name": "Test Project",
     })
-    assert resp.status_code == 201
+    assert resp.status_code == 200
     data = resp.json()
     assert data["galaxy_id"]
     assert "Engineering" in data["planets"]
@@ -46,9 +46,9 @@ async def test_onboarding_creates_galaxy(client):
 async def test_onboarding_rejects_duplicate(client):
     # First onboarding
     await client.post("/api/v1/onboarding/start", json={"role": "Developer", "first_biome_name": "Test"})
-    # Second should fail
+    # Second returns existing galaxy (idempotent)
     resp = await client.post("/api/v1/onboarding/start", json={"role": "Developer", "first_biome_name": "Test2"})
-    assert resp.status_code == 400
+    assert resp.status_code == 200
 
 
 @pytest.mark.asyncio

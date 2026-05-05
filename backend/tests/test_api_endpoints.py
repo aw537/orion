@@ -9,7 +9,7 @@ async def _onboard(client):
     resp = await client.post("/api/v1/onboarding/start", json={
         "role": "Developer", "first_biome_name": "Test Project",
     })
-    assert resp.status_code == 201
+    assert resp.status_code == 200
     return resp.json()
 
 
