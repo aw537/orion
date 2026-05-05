@@ -5,10 +5,17 @@ from app.config import Settings
 
 
 class TestSettingsDefaults:
+    @patch.dict("os.environ", {}, clear=False)
     def test_default_database_url(self):
-        s = Settings()
-        assert "sqlite" in s.DATABASE_URL
-        assert "orion.db" in s.DATABASE_URL
+        import os
+        env_backup = os.environ.pop("DATABASE_URL", None)
+        try:
+            s = Settings(_env_file=None)
+            assert "postgresql+asyncpg" in s.DATABASE_URL
+            assert "orion" in s.DATABASE_URL
+        finally:
+            if env_backup is not None:
+                os.environ["DATABASE_URL"] = env_backup
 
     def test_default_redis_url(self):
         s = Settings()

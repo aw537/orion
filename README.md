@@ -371,7 +371,7 @@ npm install && npm run dev
 - **Accessibility** — all close buttons need `aria-label`. Slide-in panels use `useFocusTrap`. Animations respect `prefers-reduced-motion`. Target WCAG AA 4.5:1 contrast for text on `--bg`.
 
 ```bash
-# Run backend tests (576 tests, ~7s)
+# Run backend tests (573 passed, ~7s)
 cd backend && pytest
 
 # Run a specific test file
