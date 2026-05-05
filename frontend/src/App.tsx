@@ -10,6 +10,7 @@ import DashboardView from './views/DashboardView';
 import OnboardingView from './views/OnboardingView';
 import SunView from './views/SunView';
 import SettingsView from './views/SettingsView';
+import InboxView from './views/InboxView';
 import KnowledgeGraphView from './views/KnowledgeGraphView';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 10_000, retry: 1 } } });
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/sun" element={<ShellRoute><SunView /></ShellRoute>} />
           <Route path="/settings" element={<ShellRoute><SettingsView /></ShellRoute>} />
           <Route path="/graph" element={<ShellRoute><KnowledgeGraphView /></ShellRoute>} />
+          <Route path="/inbox" element={<ShellRoute><InboxView /></ShellRoute>} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>

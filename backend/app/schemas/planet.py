@@ -14,6 +14,7 @@ class PlanetResponse(BaseModel):
     name: str
     description: str | None
     color: str
+    planet_type: str = "standard"
     created_at: datetime
     stardust_count: int
     health_status: str

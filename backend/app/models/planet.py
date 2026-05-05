@@ -12,6 +12,7 @@ class Planet(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     color: Mapped[str] = mapped_column(Text, server_default="#6D28D9")
+    planet_type: Mapped[str] = mapped_column(Text, server_default="standard")  # "standard" | "inbox"
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     stardust_count: Mapped[int] = mapped_column(Integer, server_default="0")
     health_status: Mapped[str] = mapped_column(Text, server_default="healthy")

@@ -9,6 +9,7 @@ interface Planet {
   name: string;
   stardust_count: number;
   color?: string;
+  planet_type?: string;
   biomes?: { id: string; name: string; lifecycle_state: string; stardust_count: number }[];
   health_status?: string;
 }
@@ -27,7 +28,7 @@ interface Props {
 interface Star { x: number; y: number; r: number; baseO: number; phase: number; period: number }
 interface PlanetState {
   id: string; name: string; angle: number; speed: number; orbitR: number; r: number;
-  color: string; dust: number; biomes: number; _x: number; _y: number;
+  color: string; dust: number; biomes: number; _x: number; _y: number; planetType?: string;
 }
 interface Bridge { a: string; b: string }
 interface Pulse { planet: PlanetState; t0: number; dur: number; color: string }
@@ -96,7 +97,7 @@ export default React.memo(function GalaxyCanvas({ galaxy, onPlanetClick, onSunCl
       r: Math.max(16, Math.min(30, 14 + Math.sqrt(p.stardust_count) * 0.5)),
       color: colors[p.name.toLowerCase()] || p.color || theme.colors.planetDefault,
       dust: p.stardust_count, biomes: p.biomes?.length || 0,
-      _x: 0, _y: 0,
+      _x: 0, _y: 0, planetType: p.planet_type,
     }));
     s.bridges = [];
     if (s.planets.length >= 2) s.bridges.push({ a: s.planets[0].id, b: s.planets[1].id });
@@ -300,24 +301,46 @@ export default React.memo(function GalaxyCanvas({ galaxy, onPlanetClick, onSunCl
       for (const p of s.planets) {
         const isH = newHover?.id === p.id;
         const r = p.r * (isH ? 1.08 : 1);
-        ctx.fillStyle = p.color;
-        ctx.beginPath(); ctx.arc(p._x, p._y, r, 0, Math.PI * 2); ctx.fill();
-        ctx.save();
-        ctx.translate(p._x - r * 0.3, p._y - r * 0.35);
-        ctx.scale(1, 0.55);
-        const hl = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.65);
-        hl.addColorStop(0, 'rgba(255, 255, 255, 0.32)');
-        hl.addColorStop(1, 'rgba(255, 255, 255, 0)');
-        ctx.fillStyle = hl;
-        ctx.beginPath(); ctx.arc(0, 0, r * 0.65, 0, Math.PI * 2); ctx.fill();
-        ctx.restore();
+
+        if (p.planetType === 'inbox') {
+          // Inbox planet: dashed ring + diamond shape
+          ctx.save();
+          ctx.strokeStyle = p.color;
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 4]);
+          ctx.lineDashOffset = -now / 200;
+          ctx.beginPath(); ctx.arc(p._x, p._y, r + 4, 0, Math.PI * 2); ctx.stroke();
+          ctx.restore();
+          // Inner filled diamond
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.moveTo(p._x, p._y - r * 0.8);
+          ctx.lineTo(p._x + r * 0.6, p._y);
+          ctx.lineTo(p._x, p._y + r * 0.8);
+          ctx.lineTo(p._x - r * 0.6, p._y);
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          ctx.fillStyle = p.color;
+          ctx.beginPath(); ctx.arc(p._x, p._y, r, 0, Math.PI * 2); ctx.fill();
+          ctx.save();
+          ctx.translate(p._x - r * 0.3, p._y - r * 0.35);
+          ctx.scale(1, 0.55);
+          const hl = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.65);
+          hl.addColorStop(0, 'rgba(255, 255, 255, 0.32)');
+          hl.addColorStop(1, 'rgba(255, 255, 255, 0)');
+          ctx.fillStyle = hl;
+          ctx.beginPath(); ctx.arc(0, 0, r * 0.65, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
+
         ctx.fillStyle = '#C4B5FD';
         ctx.font = '500 12px Inter, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(p.name, p._x, p._y + r + 22);
         ctx.fillStyle = '#9484C2';
         ctx.font = '500 11px "JetBrains Mono", monospace';
-        ctx.fillText(`${p.dust.toLocaleString()} · ${p.biomes} biomes`, p._x, p._y + r + 38);
+        ctx.fillText(p.planetType === 'inbox' ? 'drop files' : `${p.dust.toLocaleString()} · ${p.biomes} biomes`, p._x, p._y + r + 38);
 
         // Keyboard focus ring
         if (s.focusedIdx !== null && s.focusedIdx >= 0 && s.planets[s.focusedIdx]?.id === p.id) {
