@@ -25,8 +25,10 @@ services:
       - ./data:/app/data
       - ${OBSIDIAN_VAULT_PATH:-./data/vault}:/vault
       - ./content:/app/content
+      - ${HOME}:${HOME}:ro
     environment:
       - PYTHONPATH=/app
+      - HOST_HOME=${HOME}
       - DATABASE_URL=postgresql+asyncpg://orion:${POSTGRES_PASSWORD:-orion_dev}@orion-postgres:5432/orion
       - REDIS_URL=redis://orion-redis:6379
       - CHROMA_URL=http://orion-chroma:8000

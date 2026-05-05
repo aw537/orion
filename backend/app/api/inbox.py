@@ -1,5 +1,6 @@
 import json
 import uuid
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy import select, insert, desc
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,24 +18,53 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 
 async def get_or_create_inbox_planet(galaxy_id: str, db: AsyncSession) -> Planet:
-    """Lazily get or create the Inbox Planet for a Galaxy."""
+    """Get or create the Inbox Planet and its inbox Biome for a Galaxy."""
     planet = (await db.execute(
         select(Planet).where(Planet.galaxy_id == galaxy_id, Planet.planet_type == "inbox")
     )).scalar_one_or_none()
-    if planet:
-        return planet
+    if not planet:
+        planet_id = str(uuid.uuid4())
+        await db.execute(insert(Planet).values(
+            id=planet_id,
+            galaxy_id=galaxy_id,
+            name="Inbox",
+            description="Drop zone — files uploaded here are parsed and routed to other Planets.",
+            color="#F59E0B",
+            planet_type="inbox",
+        ))
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        await db.execute(insert(Biome).values(
+            id=str(uuid.uuid4()),
+            planet_id=planet_id,
+            galaxy_id=galaxy_id,
+            name="Inbox",
+            is_inbox=True,
+            lifecycle_state="ACTIVE",
+            created_at=now,
+            last_active_at=now,
+        ))
+        await db.commit()
+        planet = (await db.execute(select(Planet).where(Planet.id == planet_id))).scalar_one()
 
-    planet_id = str(uuid.uuid4())
-    await db.execute(insert(Planet).values(
-        id=planet_id,
-        galaxy_id=galaxy_id,
-        name="Inbox",
-        description="Drop zone — files uploaded here are parsed and routed to other Planets.",
-        color="#F59E0B",
-        planet_type="inbox",
-    ))
-    await db.commit()
-    return (await db.execute(select(Planet).where(Planet.id == planet_id))).scalar_one()
+    # Ensure the inbox biome exists even if planet was created without it
+    inbox_biome = (await db.execute(
+        select(Biome).where(Biome.planet_id == planet.id, Biome.is_inbox == True)
+    )).scalar_one_or_none()
+    if not inbox_biome:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        await db.execute(insert(Biome).values(
+            id=str(uuid.uuid4()),
+            planet_id=planet.id,
+            galaxy_id=galaxy_id,
+            name="Inbox",
+            is_inbox=True,
+            lifecycle_state="ACTIVE",
+            created_at=now,
+            last_active_at=now,
+        ))
+        await db.commit()
+
+    return planet
 
 
 @router.post("/upload", response_model=InboxUploadResponse)
