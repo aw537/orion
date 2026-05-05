@@ -75,7 +75,7 @@ Orion is three independent services that communicate over HTTP:
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
 │  Frontend    │     │  MCP Server │     │  REST API   │
 │  :3000      │────▶│  :8787      │────▶│  :8000      │
-│  React UI   │     │  20 tools   │     │  97 endpoints│
+│  React UI   │     │  20 tools   │     │ 101 endpoints│
 └─────────────┘     └─────────────┘     └──────┬──────┘
                                                │
                           ┌────────────────────┼────────────────────┐
@@ -97,7 +97,7 @@ Orion is three independent services that communicate over HTTP:
 | URL | Service | Description |
 |-----|---------|-------------|
 | `http://localhost:3000` | Frontend | Galaxy visualization, knowledge graph, agent panels |
-| `http://localhost:8000` | REST API | 97 endpoints, OpenAPI docs at `/docs` |
+| `http://localhost:8000` | REST API | 101 endpoints, OpenAPI docs at `/docs` |
 | `http://localhost:8787` | MCP Server | 20 tools for AI agents |
 
 ### Project Structure
@@ -346,7 +346,7 @@ ORION_API_URL=http://your-orion-server:8000 orion-mcp
 ### Local development without Docker
 
 ```bash
-# Backend (uses SQLite by default)
+# Backend (requires PostgreSQL running locally, or set DATABASE_URL=sqlite+aiosqlite:///./data/orion.db in .env)
 cd backend
 pip install -e ".[dev]"
 uvicorn app.main:app --reload --port 8000
@@ -372,7 +372,7 @@ npm install && npm run dev
 - **Accessibility** — all close buttons need `aria-label`. Slide-in panels use `useFocusTrap`. Animations respect `prefers-reduced-motion`. Target WCAG AA 4.5:1 contrast for text on `--bg`.
 
 ```bash
-# Run backend tests (573 passed, ~7s)
+# Run backend tests (598 passed, ~8s)
 cd backend && pytest
 
 # Run a specific test file
@@ -387,8 +387,8 @@ cd backend && alembic upgrade head
 
 ### Tech Stack
 
-**Backend:** Python 3.12, FastAPI, SQLAlchemy (async), PostgreSQL / SQLite, ChromaDB, Redis 7, APScheduler, Alembic (2 migrations)
-**MCP Server:** Python 3.12, FastMCP, httpx (HTTP client to backend)
+**Backend:** Python 3.11+, FastAPI, SQLAlchemy (async), PostgreSQL, ChromaDB, Redis 7, APScheduler, Alembic (2 migrations)
+**MCP Server:** Python 3.11+, FastMCP, httpx (HTTP client to backend)
 **Frontend:** React 18, Vite, TypeScript, Tailwind CSS, Zustand, TanStack Query, D3.js
 **Infrastructure:** Docker Compose — 7 services (API, MCP, frontend, PostgreSQL, Redis, ChromaDB, Ollama)
 
@@ -448,15 +448,25 @@ Key endpoint groups:
 |--------|-----------|-------------|
 | `/api/v1/auth` | 4 | Register, login, logout, profile |
 | `/api/v1/brain` | 12 | Orient, think, recall, calibrate, health, know, graph query, find path, context, write, entity get, status |
-| `/api/v1/galaxy` | 13 | Galaxy status, Sun, strength, invite, join, merge |
-| `/api/v1/planets` | 5 | CRUD, protocol overrides |
+| `/api/v1/galaxy` | 6 | Galaxy status, strength, invite, join |
+| `/api/v1/galaxy/merge` | 7 | Propose, accept, execute, status |
+| `/api/v1/planets` | 3 | CRUD |
 | `/api/v1/biomes` | 6 | CRUD, lifecycle management |
-| `/api/v1/stardust` | 3 | Knowledge records |
-| `/api/v1/agents` | 5 | Agent identities, expertise, sessions, health |
-| `/api/v1/graph` | 6 | Neighborhood, paths, hubs, unlinked mentions |
-| `/api/v1/admin` | 5 | Active agents, planet health, contradictions, bridges, strength (owner/admin only) |
+| `/api/v1/stardust` | 5 | Knowledge records |
+| `/api/v1/agents` | 7 | Agent identities, expertise, sessions, health |
+| `/api/v1/graph` | 8 | Neighborhood, paths, hubs, unlinked mentions, full graph |
+| `/api/v1/admin` | 6 | Active agents, planet health, contradictions, bridges, strength (owner/admin only) |
+| `/api/v1/sun` | 7 | Read, update, working context, evolution log |
+| `/api/v1/nebula` | 3 | Activity log, dashboard |
+| `/api/v1/onboarding` | 3 | Start, status, templates |
+| `/api/v1/routing` | 3 | Auto-routing, inbox |
+| `/api/v1/contradictions` | 3 | List, resolve, dismiss |
+| `/api/v1/cache` | 3 | Cache management |
+| `/api/v1/model-profiles` | 4 | Model profile CRUD |
+| `/api/v1/entities` | 2 | Entity lookup |
 | `/api/v1/ask` | 1 | Natural language knowledge queries |
 | `/api/v1/search` | 1 | Semantic search |
 | `/api/v1/synthesize` | 2 | Knowledge synthesis |
+| `/api/v1/inbox` | 2 | Inbox items |
 
 ---
