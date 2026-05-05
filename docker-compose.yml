@@ -24,6 +24,7 @@ services:
     volumes:
       - ./data:/app/data
       - ${OBSIDIAN_VAULT_PATH:-./data/vault}:/vault
+      - ./content:/app/content
     environment:
       - PYTHONPATH=/app
       - DATABASE_URL=postgresql+asyncpg://orion:${POSTGRES_PASSWORD:-orion_dev}@orion-postgres:5432/orion
