@@ -138,23 +138,27 @@ export default function GalaxyView() {
       </div>
 
       {/* Bottom left: planet legend */}
-      <div className="absolute bottom-7 left-8 z-[5] flex gap-3.5 items-center flex-wrap max-w-[60%] pointer-events-auto">
-        {galaxy.planets?.map((p: { id: string; name: string; color?: string; stardust_count?: number }) => (
+      <div className="absolute bottom-7 left-8 z-[5] pointer-events-auto">
+        <div className="flex flex-col gap-1 px-3 py-2.5 rounded-xl bg-[rgba(7,4,26,0.75)] border border-[var(--border-soft)] backdrop-blur-sm">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-3)] mb-0.5">Planets</span>
+          {galaxy.planets?.map((p: { id: string; name: string; color?: string; stardust_count?: number }) => (
+            <div
+              key={p.id}
+              className="inline-flex items-center gap-2 px-1.5 py-1 rounded-md text-xs text-[var(--text-1)] cursor-pointer hover:bg-[var(--surface-2)] transition-colors duration-100"
+              onClick={() => navigate(`/planet/${p.id}`)}
+            >
+              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: p.color || '#7C3AED', boxShadow: `0 0 8px ${p.color || '#7C3AED'}` }} />
+              {p.name}
+              <span className="font-mono text-[11px] text-[var(--text-3)] ml-auto">{p.stardust_count?.toLocaleString()}</span>
+            </div>
+          ))}
           <div
-            key={p.id}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[rgba(7,4,26,0.6)] border border-[var(--border-soft)] text-xs text-[var(--text-1)] cursor-pointer hover:border-[var(--border)] transition-all duration-150"
-            onClick={() => navigate(`/planet/${p.id}`)}
+            className="inline-flex items-center gap-2 px-1.5 py-1 rounded-md text-xs text-[var(--text-3)] cursor-pointer hover:text-[var(--text-1)] hover:bg-[var(--surface-2)] transition-colors duration-100 border-t border-[var(--border-soft)] mt-1 pt-1.5"
+            onClick={() => setCreateOpen(true)}
           >
-            <span className="w-2 h-2 rounded-full" style={{ background: p.color || '#7C3AED', boxShadow: `0 0 8px ${p.color || '#7C3AED'}` }} />
-            {p.name}
-            <span className="font-mono text-[11px] text-[var(--text-3)]">{p.stardust_count?.toLocaleString()}</span>
+            <span className="w-2 h-2 rounded-full border border-dashed border-[var(--text-3)] flex-shrink-0" />
+            Add planet
           </div>
-        ))}
-        <div
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[rgba(7,4,26,0.6)] border border-dashed border-[var(--border-soft)] text-xs text-[var(--text-2)] cursor-pointer hover:text-[var(--text-1)] hover:border-[var(--border)] transition-all duration-150"
-          onClick={() => setCreateOpen(true)}
-        >
-          + Add planet
         </div>
       </div>
 
