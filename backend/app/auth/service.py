@@ -84,6 +84,7 @@ async def validate_token(raw_token: str, db: AsyncSession) -> User | None:
         return None
     # Touch last_used
     sess.last_used = datetime.now(timezone.utc).replace(tzinfo=None)
+    await db.flush()
     user = (await db.execute(select(User).where(User.id == sess.user_id, User.is_active == True))).scalar_one_or_none()
     return user
 
