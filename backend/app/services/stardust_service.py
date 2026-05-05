@@ -277,7 +277,7 @@ async def run_async_tasks(stardust_id: str, content: str, galaxy_id: str, planet
                         # Link
                         await db.execute(insert(EntityStardust).values(
                             entity_id=entity_id, stardust_id=stardust_id, relationship_type="mentioned_in",
-                        ).prefix_with("OR IGNORE"))
+                        ).on_conflict_do_nothing())
 
                         # Timeline
                         await db.execute(insert(EntityTimeline).values(
