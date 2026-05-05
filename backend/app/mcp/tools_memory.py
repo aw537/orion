@@ -15,9 +15,10 @@ async def memory_write(
     content: str, planet: str | None = None, biome: str | None = None,
     region: str = "contextual", context_tags: list[str] | None = None,
     gravity: str = "BIOME",
+    galaxy_id: str | None = None,
 ) -> dict:
     """Store a piece of knowledge in your Galaxy. Planet is auto-routed if not specified."""
-    galaxy_id = await _get_galaxy_id()
+    galaxy_id = galaxy_id or await _get_galaxy_id()
     if not galaxy_id:
         return {"status": "error", "message": "No galaxy found"}
     receipt = await stardust_service.write_stardust(
@@ -61,9 +62,10 @@ async def memory_write(
 async def memory_search(
     query: str, planet: str | None = None, biome: str | None = None,
     region: str | None = None, limit: int = 5,
+    galaxy_id: str | None = None,
 ) -> dict:
     """Search for relevant knowledge in your Galaxy."""
-    galaxy_id = await _get_galaxy_id()
+    galaxy_id = galaxy_id or await _get_galaxy_id()
     if not galaxy_id:
         return {"records": [], "retrieval_metadata": {"error": "No galaxy found"}}
     result = await search_service.search(query, galaxy_id, planet_name=planet, biome_name=biome, region=region, limit=limit)
@@ -73,19 +75,23 @@ async def memory_search(
 async def memory_context(
     planet: str | None = None, biome: str | None = None,
     max_tokens: int = 4000, model: str | None = None,
+    galaxy_id: str | None = None,
 ) -> dict:
     """Get a structured context bundle for the current session."""
-    galaxy_id = await _get_galaxy_id()
+    galaxy_id = galaxy_id or await _get_galaxy_id()
     if not galaxy_id:
         return {"error": "No galaxy found"}
     bundle = await context_service.build_context(galaxy_id, planet_name=planet, biome_name=biome, max_tokens=max_tokens)
     return bundle.model_dump(mode="json")
 
 
-async def memory_status() -> dict:
+async def memory_status(galaxy_id: str | None = None) -> dict:
     """Get current Galaxy health and system state."""
     async with async_session() as db:
-        galaxy = (await db.execute(select(Galaxy).limit(1))).scalar_one_or_none()
+        if galaxy_id:
+            galaxy = (await db.execute(select(Galaxy).where(Galaxy.id == galaxy_id))).scalar_one_or_none()
+        else:
+            galaxy = (await db.execute(select(Galaxy).limit(1))).scalar_one_or_none()
         if not galaxy:
             return {"error": "No galaxy found"}
         planets = (await db.execute(select(Planet).where(Planet.galaxy_id == galaxy.id))).scalars().all()
@@ -120,9 +126,9 @@ async def memory_status() -> dict:
         }
 
 
-async def memory_entity_get(entity_name: str, planet: str | None = None) -> dict:
+async def memory_entity_get(entity_name: str, planet: str | None = None, galaxy_id: str | None = None) -> dict:
     """Retrieve an entity profile with relationship context and timeline."""
-    galaxy_id = await _get_galaxy_id()
+    galaxy_id = galaxy_id or await _get_galaxy_id()
     if not galaxy_id:
         return {"error": "No galaxy found"}
 
