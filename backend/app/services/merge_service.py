@@ -201,6 +201,7 @@ class MergeService:
                 })
 
         proposal.entity_mappings_count = len(mappings)
+        proposal.reconciliation_done = True
         await db.commit()
         return mappings
 
@@ -253,6 +254,7 @@ class MergeService:
                 })
 
         proposal.bridges_created = len(bridges)
+        proposal.bridging_done = True
         await db.commit()
         return bridges
 
@@ -272,16 +274,11 @@ class MergeService:
             await self.negotiate_sun(proposal_id, db)
             proposal = await self._get_proposal(proposal_id, db)
 
-        if proposal.entity_mappings_count == 0:
-            # Check if reconciliation was run (could be 0 legitimate matches)
-            existing = (await db.execute(
-                select(EntityMergeMapping).where(EntityMergeMapping.proposal_id == proposal_id).limit(1)
-            )).scalar_one_or_none()
-            if not existing:
-                await self.reconcile_entities(proposal_id, db)
-                proposal = await self._get_proposal(proposal_id, db)
+        if not proposal.reconciliation_done:
+            await self.reconcile_entities(proposal_id, db)
+            proposal = await self._get_proposal(proposal_id, db)
 
-        if proposal.bridges_created == 0:
+        if not proposal.bridging_done:
             await self.create_bridges(proposal_id, db)
             proposal = await self._get_proposal(proposal_id, db)
 
