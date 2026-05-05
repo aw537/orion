@@ -73,8 +73,37 @@ class TestQuery:
         mock_chroma_http.get_or_create_collection.return_value = col
         await chroma.query("g", "p", "analytical", [0.1], where={"gravity": "BIOME"})
         kwargs = col.query.call_args[1]
-        # planet_id filter merged with user where
-        assert kwargs["where"] == {"planet_id": "p", "gravity": "BIOME"}
+        # planet_id and caller where combined via $and
+        assert kwargs["where"] == {"$and": [{"planet_id": "p"}, {"gravity": "BIOME"}]}
+
+    @pytest.mark.asyncio
+    async def test_query_with_and_where_filter(self, chroma, mock_chroma_http):
+        """Regression: $and filters from caller must not be flattened incorrectly."""
+        col = MagicMock()
+        col.query.return_value = {"ids": [[]], "documents": [[]], "metadatas": [[]], "distances": [[]]}
+        mock_chroma_http.get_or_create_collection.return_value = col
+        caller_where = {"$and": [{"gravity": {"$in": ["BIOME", "PLANET", "GALAXY"]}}, {"biome_id": "b1"}]}
+        await chroma.query("g", "p", "analytical", [0.1], where=caller_where)
+        kwargs = col.query.call_args[1]
+        assert kwargs["where"] == {"$and": [{"planet_id": "p"}, caller_where]}
+
+    @pytest.mark.asyncio
+    async def test_query_no_planet_with_where(self, chroma, mock_chroma_http):
+        col = MagicMock()
+        col.query.return_value = {"ids": [[]], "documents": [[]], "metadatas": [[]], "distances": [[]]}
+        mock_chroma_http.get_or_create_collection.return_value = col
+        await chroma.query("g", None, "analytical", [0.1], where={"gravity": "BIOME"})
+        kwargs = col.query.call_args[1]
+        assert kwargs["where"] == {"gravity": "BIOME"}
+
+    @pytest.mark.asyncio
+    async def test_query_planet_no_where(self, chroma, mock_chroma_http):
+        col = MagicMock()
+        col.query.return_value = {"ids": [[]], "documents": [[]], "metadatas": [[]], "distances": [[]]}
+        mock_chroma_http.get_or_create_collection.return_value = col
+        await chroma.query("g", "p", "analytical", [0.1])
+        kwargs = col.query.call_args[1]
+        assert kwargs["where"] == {"planet_id": "p"}
 
 
 class TestQueryAllRegions:
