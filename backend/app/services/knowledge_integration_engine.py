@@ -57,6 +57,21 @@ class KnowledgeIntegrationEngine:
                 )
             result["relationships_extracted"] = len(unique_rels)
 
+            # Co-occurrence: entities sharing the same stardust get a WORKS_WITH edge
+            # (only if no explicit relationship was already extracted between them)
+            for i in range(len(entities)):
+                for j in range(i + 1, len(entities)):
+                    pair = (entities[i].id, entities[j].id)
+                    reverse_pair = (entities[j].id, entities[i].id)
+                    if pair not in seen and reverse_pair not in seen:
+                        await graph_service.upsert_relationship(
+                            source_id=entities[i].id, target_id=entities[j].id,
+                            rel_type="WORKS_WITH", confidence=0.5,
+                            stardust_id=stardust.id, galaxy_id=galaxy_id, db=db,
+                        )
+                        seen.add(pair)
+                        result["relationships_extracted"] += 1
+
         # 3. Update backlinks
         if entities:
             await graph_service.update_backlinks(stardust, entities, db)
