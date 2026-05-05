@@ -162,15 +162,15 @@ async def _confidence_decay(galaxy_id: str, results: AuditResults):
         )).scalars().all()
 
         for s in stale:
+            old_conf = s.confidence
             factor = 0.85 if (s.last_accessed and s.last_accessed < cutoff_90) else 0.95
-            new_conf = s.confidence * factor
-            delta = new_conf - s.confidence
+            new_conf = old_conf * factor
             # Set last_accessed to now so this record won't be re-decayed next audit
             await db.execute(update(Stardust).where(Stardust.id == s.id).values(
                 confidence=new_conf, last_accessed=now,
             ))
             results.confidence_decays += 1
-            await nebula_service.log_event(galaxy_id=galaxy_id, action_type="EVICT", initiated_by="audit_ai", record_id=s.id, confidence_delta=delta, db=db)
+            await nebula_service.log_event(galaxy_id=galaxy_id, action_type="EVICT", initiated_by="audit_ai", record_id=s.id, confidence_delta=new_conf - old_conf, db=db)
         await db.commit()
 
 

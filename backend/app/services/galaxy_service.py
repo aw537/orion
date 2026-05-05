@@ -63,7 +63,7 @@ async def compute_galaxy_strength(galaxy_id: str, db: AsyncSession) -> dict:
     volume_score = min(100.0, (records_per_day / 20.0) * 100)
     density_ratio = total_entity_links / max(stardust_count, 1)
     density_score = min(100.0, density_ratio * 200)
-    health_score = 50.0 if total_contradictions == 0 else (resolved_contradictions / total_contradictions) * 100
+    health_score = 100.0 if total_contradictions == 0 else (resolved_contradictions / total_contradictions) * 100
     diversity_score = min(100.0, (diverse_records / max(stardust_count, 1)) * 150)
     coverage_score = (active_biomes / max(total_biomes, 1)) * 100
 
