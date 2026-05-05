@@ -54,6 +54,7 @@ export default function OnboardingView() {
   const [toolInput, setToolInput] = useState('');
   const [contradictionPref, setContradictionPref] = useState(saved.contradictionPref || 'flag_and_ask');
   const [steeringDocPath, setSteeringDocPath] = useState(saved.steeringDocPath || '');
+  const [steeringDocContent, setSteeringDocContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const nameRef = useRef<HTMLInputElement>(null);
@@ -100,6 +101,7 @@ export default function OnboardingView() {
         communication_style: commStyle,
         contradiction_preference: contradictionPref,
         steering_doc_path: steeringDocPath.trim() || null,
+        steering_doc_content: steeringDocContent,
       });
       qc.invalidateQueries({ queryKey: ['galaxy'] });
       if (source !== 'empty' && importPath.trim() && !result.import_started) {
@@ -215,12 +217,25 @@ export default function OnboardingView() {
               </div>
               {source !== 'empty' && (
                 <div className="mt-4">
-                  <input
-                    value={importPath}
-                    onChange={(e) => setImportPath(e.target.value)}
-                    placeholder={source === 'obsidian' ? '/vault' : source === 'git' ? '~/projects/my-repo' : '~/Documents/notes'}
-                    className="w-full h-10 px-3.5 bg-[var(--surface-3)] border border-[var(--border-soft)] rounded-lg text-sm text-[var(--text-1)] placeholder:text-[var(--text-3)] outline-none focus:border-[var(--violet-300)] transition-colors duration-150"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      value={importPath}
+                      onChange={(e) => setImportPath(e.target.value)}
+                      placeholder={source === 'obsidian' ? '/vault' : source === 'git' ? '~/projects/my-repo' : '~/Documents/notes'}
+                      className="flex-1 h-10 px-3.5 bg-[var(--surface-3)] border border-[var(--border-soft)] rounded-lg text-sm text-[var(--text-1)] placeholder:text-[var(--text-3)] outline-none focus:border-[var(--violet-300)] transition-colors duration-150"
+                    />
+                    <label className="h-10 px-3.5 flex items-center gap-1.5 bg-[var(--surface-3)] border border-[var(--border-soft)] rounded-lg text-sm text-[var(--text-2)] cursor-pointer hover:border-[var(--violet-300)] hover:text-[var(--text-1)] transition-colors">
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 4.5A1.5 1.5 0 013.5 3h3.172a1.5 1.5 0 011.06.44l.768.767a1.5 1.5 0 001.06.439H12.5A1.5 1.5 0 0114 6.146V11.5a1.5 1.5 0 01-1.5 1.5h-9A1.5 1.5 0 012 11.5v-7z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      Browse
+                      <input type="file" className="hidden" {...{ webkitdirectory: '', directory: '' } as any} onChange={(e) => {
+                        const files = e.target.files;
+                        if (files && files.length > 0) {
+                          const path = files[0].webkitRelativePath.split('/')[0];
+                          setImportPath(path);
+                        }
+                      }} />
+                    </label>
+                  </div>
                   {source === 'obsidian' && (
                     <p className="mt-1.5 text-[11px] text-[var(--text-3)]">Your vault is mounted at <code className="font-mono text-[var(--text-2)]">/vault</code> inside Orion's Docker container.</p>
                   )}
@@ -349,7 +364,20 @@ export default function OnboardingView() {
               <div className="flex flex-col gap-4">
                 <div>
                   <label className="text-xs text-[var(--text-3)] uppercase tracking-[0.08em] mb-1.5 block">Path to steering document</label>
-                  <input value={steeringDocPath} onChange={(e) => setSteeringDocPath(e.target.value)} placeholder="e.g. ~/projects/my-app/CLAUDE.md" className="w-full h-11 px-4 bg-[rgba(0,0,0,0.25)] border border-[var(--border)] rounded-lg text-[var(--text-1)] text-sm font-mono outline-none focus:border-[var(--violet-300)]" />
+                  <div className="flex gap-2">
+                    <input value={steeringDocPath} onChange={(e) => { setSteeringDocPath(e.target.value); setSteeringDocContent(null); }} placeholder="e.g. ~/projects/my-app/CLAUDE.md" className="flex-1 h-11 px-4 bg-[rgba(0,0,0,0.25)] border border-[var(--border)] rounded-lg text-[var(--text-1)] text-sm font-mono outline-none focus:border-[var(--violet-300)]" />
+                    <label className="h-11 px-4 flex items-center gap-1.5 bg-[rgba(0,0,0,0.25)] border border-[var(--border)] rounded-lg text-sm text-[var(--text-2)] cursor-pointer hover:border-[var(--violet-300)] hover:text-[var(--text-1)] transition-colors">
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 14h10M8 2v9m0 0L5 8m3 3l3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      Browse
+                      <input type="file" accept=".md,.markdown,.txt" className="hidden" onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setSteeringDocPath(file.name);
+                          file.text().then(setSteeringDocContent);
+                        }
+                      }} />
+                    </label>
+                  </div>
                   <p className="mt-1.5 text-[11px] text-[var(--text-3)]">The file will be read once and stored in your Galaxy. You can re-import it anytime from the Sun view.</p>
                 </div>
               </div>

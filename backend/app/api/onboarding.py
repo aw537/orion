@@ -62,6 +62,7 @@ class OnboardingRequest(BaseModel):
     reexplanation_frustrations: list[str] = []
     ai_frustrations: list[str] = []
     steering_doc_path: str | None = None
+    steering_doc_content: str | None = None
 
 
 class OnboardingResponse(BaseModel):
@@ -143,9 +144,11 @@ async def start_onboarding(body: OnboardingRequest, background_tasks: Background
         "session_end_instruction": "Write any new decisions or learnings to the active Biome.",
         "current_focus": body.goal or body.first_biome_name,
     }
+    _FALLBACK_STEERING = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "content", "STEERING.md")
+    steering_content = body.steering_doc_content or _read_steering_doc(body.steering_doc_path) or _read_steering_doc(_FALLBACK_STEERING)
     await sun_service.initialize_sun(galaxy_id, wizard, db,
-        steering_doc_content=_read_steering_doc(body.steering_doc_path),
-        steering_doc_path=body.steering_doc_path)
+        steering_doc_content=steering_content,
+        steering_doc_path=body.steering_doc_path or _FALLBACK_STEERING)
 
     # Seed stardust records if goal/tools provided
     stardust_count = 0
@@ -300,6 +303,7 @@ _SAFE_BASES = [
     os.path.expanduser("~"),  # user home
     "/vault",                  # Docker-mounted vault
     "/tmp",                    # temp files
+    "/app",                    # Docker working directory
 ]
 
 
