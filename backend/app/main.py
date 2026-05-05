@@ -35,6 +35,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._hits: dict[str, list[float]] = defaultdict(list)
 
     async def dispatch(self, request: Request, call_next):
+        if get_settings().ORION_AUTH_DISABLED:
+            return await call_next(request)
         if request.url.path in _AUTH_EXEMPT_PATHS:
             return await call_next(request)
         client = request.client.host if request.client else "unknown"
@@ -92,6 +94,7 @@ from app.api import admin as admin_api
 from app.api import merge as merge_api
 from app.api import brain as brain_api
 from app.api import routing as routing_api
+from app.api import inbox as inbox_api
 from app.auth.router import router as auth_router
 
 app.include_router(auth_router)
@@ -115,6 +118,7 @@ app.include_router(admin_api.router)
 app.include_router(merge_api.router)
 app.include_router(brain_api.router)
 app.include_router(routing_api.router)
+app.include_router(inbox_api.router)
 
 # MCP server is now a separate service — see /mcp directory
 # REST API serves all Orion functionality at /api/v1
