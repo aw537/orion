@@ -3,7 +3,7 @@ import json
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
-from sqlalchemy import select, update, insert
+from sqlalchemy import and_, or_, select, update, insert
 from app.database import async_session
 from app.models import Stardust, Biome, Contradiction
 from app.models.subagent import AuditRun
@@ -103,6 +103,15 @@ async def _detect_contradictions(galaxy_id: str, results: AuditResults):
                         rec_negs = negation_words & set(rec.content.lower().split())
                         other_negs = negation_words & set(other.content.lower().split())
                         if rec_negs != other_negs:
+                            already = (await db.execute(
+                                select(Contradiction.id).where(or_(
+                                    and_(Contradiction.record_a_id == rec.id, Contradiction.record_b_id == sid),
+                                    and_(Contradiction.record_a_id == sid, Contradiction.record_b_id == rec.id),
+                                )).limit(1)
+                            )).scalar_one_or_none()
+                            if already:
+                                continue
+
                             # Determine type
                             if rec.valid_from and other.valid_from and abs((rec.valid_from - other.valid_from).days) > 30:
                                 conflict_type = "TEMPORAL"
