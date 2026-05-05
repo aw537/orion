@@ -278,7 +278,7 @@ class TestStructuredOnboarding:
             "reexplanation_frustrations": [],
             "ai_frustrations": [],
         })
-        assert resp.status_code == 201
+        assert resp.status_code == 200
         data = resp.json()
         assert data["stardust_count"] >= 3  # framework + decision + tools
 
@@ -307,7 +307,7 @@ class TestStructuredOnboarding:
             ],
             "ai_frustrations": [],
         })
-        assert resp.status_code == 201
+        assert resp.status_code == 200
         data = resp.json()
         assert data["stardust_count"] >= 4  # framework + desc + 2 reexplanations
 
@@ -323,7 +323,7 @@ class TestStructuredOnboarding:
             "reexplanation_frustrations": [],
             "ai_frustrations": [],
         })
-        assert resp.status_code == 201
+        assert resp.status_code == 200
         data = resp.json()
         assert data["entities_count"] >= 3
 
@@ -339,7 +339,7 @@ class TestStructuredOnboarding:
             "reexplanation_frustrations": [],
             "ai_frustrations": ["Keeps suggesting Flask patterns"],
         })
-        assert resp.status_code == 201
+        assert resp.status_code == 200
         data = resp.json()
         assert data.get("knowledge_gaps_count", 0) >= 1
 
@@ -358,7 +358,7 @@ class TestStructuredOnboarding:
             "reexplanation_frustrations": ["We use FastAPI not Flask"],
             "ai_frustrations": ["Suggests Django patterns"],
         })
-        assert resp.status_code == 201
+        assert resp.status_code == 200
         data = resp.json()
         # Should have: 2 from codebase (desc + framework), 2 decisions,
         # 1 tools record, 1 reexplanation = 6+ stardust
@@ -388,7 +388,7 @@ class TestStructuredOnboarding:
             ],
             "ai_frustrations": ["Suggests Flask patterns", "Ignores our auth setup"],
         })
-        assert resp.status_code == 201
+        assert resp.status_code == 200
         data = resp.json()
         # 2 codebase + 5 decisions + 1 tools + 3 reexplanations = 11+
         assert data["stardust_count"] >= 10

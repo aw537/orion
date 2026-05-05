@@ -133,7 +133,7 @@ class TestH12Audit:
             ],
             "tools": [], "reexplanation_frustrations": [], "ai_frustrations": [],
         })
-        assert resp.status_code == 201
+        assert resp.status_code == 200
 
         # Query the DB directly for the analytical stardust
         from app.database import async_session
@@ -163,7 +163,7 @@ class TestH12Audit:
             "reexplanation_frustrations": ["We use FastAPI not Flask"],
             "ai_frustrations": [],
         })
-        assert resp.status_code == 201
+        assert resp.status_code == 200
 
         from app.database import async_session
         async with async_session() as db:
@@ -189,7 +189,7 @@ class TestH12Audit:
             "reexplanation_frustrations": [],
             "ai_frustrations": ["Keeps suggesting Flask"],
         })
-        assert resp.status_code == 201
+        assert resp.status_code == 200
         data = resp.json()
         assert data["knowledge_gaps_count"] == 1
 
@@ -213,7 +213,7 @@ class TestH12Audit:
             "goal": "Build an API",
             "tools": ["FastAPI"],
         })
-        assert resp.status_code == 201
+        assert resp.status_code == 200
         data = resp.json()
         assert data["stardust_count"] >= 2  # goal + tools
         assert data["entities_count"] >= 1

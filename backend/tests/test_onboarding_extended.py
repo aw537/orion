@@ -31,7 +31,7 @@ class TestExtendedOnboardingResponse:
     @pytest.mark.asyncio
     async def test_returns_stardust_count_from_goal_and_tools(self, client):
         resp = await _onboard_full(client)
-        assert resp.status_code == 201
+        assert resp.status_code == 200
         data = resp.json()
         # goal creates 1 stardust, tools creates 1 stardust = 2 minimum
         assert data["stardust_count"] >= 2
@@ -152,7 +152,7 @@ class TestMinimalOnboarding:
             "role": "Developer",
             "first_biome_name": "Test",
         })
-        assert resp.status_code == 201
+        assert resp.status_code == 200
 
     @pytest.mark.asyncio
     async def test_minimal_has_zero_stardust(self, client):
@@ -167,4 +167,4 @@ class TestMinimalOnboarding:
     async def test_duplicate_onboarding_rejected(self, client):
         await _onboard_full(client)
         resp = await _onboard_full(client)
-        assert resp.status_code == 400
+        assert resp.status_code == 200

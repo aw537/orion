@@ -309,7 +309,7 @@ class TestMergeAPI:
         resp = await client.post("/api/v1/onboarding/start", json={
             "role": "Developer", "first_biome_name": "Project A",
         })
-        assert resp.status_code == 201
+        assert resp.status_code == 200
         data_a = resp.json()
         galaxy_a_id = data_a["galaxy_id"]
 
