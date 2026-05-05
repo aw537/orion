@@ -1,11 +1,12 @@
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import Text, Integer, DateTime, ForeignKey, func
+from sqlalchemy import Text, Integer, DateTime, ForeignKey, UniqueConstraint, func
 from datetime import datetime
 from app.models.galaxy import Base
 
 
 class Contradiction(Base):
     __tablename__ = "contradictions"
+    __table_args__ = (UniqueConstraint("record_a_id", "record_b_id", name="uq_contradiction_pair"),)
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     galaxy_id: Mapped[str] = mapped_column(Text, ForeignKey("galaxies.id"), nullable=False)

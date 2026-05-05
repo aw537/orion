@@ -3,7 +3,7 @@ import json
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
-from sqlalchemy import select, update, insert
+from sqlalchemy import and_, or_, select, update, insert
 from app.database import async_session
 from app.models import Stardust, Biome, Contradiction
 from app.models.subagent import AuditRun
@@ -103,6 +103,15 @@ async def _detect_contradictions(galaxy_id: str, results: AuditResults):
                         rec_negs = negation_words & set(rec.content.lower().split())
                         other_negs = negation_words & set(other.content.lower().split())
                         if rec_negs != other_negs:
+                            already = (await db.execute(
+                                select(Contradiction.id).where(or_(
+                                    and_(Contradiction.record_a_id == rec.id, Contradiction.record_b_id == sid),
+                                    and_(Contradiction.record_a_id == sid, Contradiction.record_b_id == rec.id),
+                                )).limit(1)
+                            )).scalar_one_or_none()
+                            if already:
+                                continue
+
                             # Determine type
                             if rec.valid_from and other.valid_from and abs((rec.valid_from - other.valid_from).days) > 30:
                                 conflict_type = "TEMPORAL"
@@ -153,15 +162,15 @@ async def _confidence_decay(galaxy_id: str, results: AuditResults):
         )).scalars().all()
 
         for s in stale:
+            old_conf = s.confidence
             factor = 0.85 if (s.last_accessed and s.last_accessed < cutoff_90) else 0.95
-            new_conf = s.confidence * factor
-            delta = new_conf - s.confidence
+            new_conf = old_conf * factor
             # Set last_accessed to now so this record won't be re-decayed next audit
             await db.execute(update(Stardust).where(Stardust.id == s.id).values(
                 confidence=new_conf, last_accessed=now,
             ))
             results.confidence_decays += 1
-            await nebula_service.log_event(galaxy_id=galaxy_id, action_type="EVICT", initiated_by="audit_ai", record_id=s.id, confidence_delta=delta, db=db)
+            await nebula_service.log_event(galaxy_id=galaxy_id, action_type="EVICT", initiated_by="audit_ai", record_id=s.id, confidence_delta=new_conf - old_conf, db=db)
         await db.commit()
 
 

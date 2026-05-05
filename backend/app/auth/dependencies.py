@@ -38,6 +38,7 @@ async def get_current_user(
         )
         db.add(dev_user)
         await db.flush()
+        await db.commit()
         return dev_user
 
     auth = request.headers.get("authorization", "")
