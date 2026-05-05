@@ -96,6 +96,7 @@ async def orient(body: OrientRequest, user: User = Depends(get_current_user), ga
     return await tools_brain.brain_orient(
         body.agent_name, body.model, body.agent_type,
         body.active_planet, body.active_biome, body.max_tokens,
+        galaxy_id=galaxy.id,
     )
 
 
@@ -105,6 +106,7 @@ async def think(body: ThinkRequest, user: User = Depends(get_current_user), gala
         body.content, body.planet, body.biome, body.cognitive_mode,
         body.confidence, body.reasoning, body.supersedes, body.scope,
         body.context_tags, body.session_id, body.agent_name,
+        galaxy_id=galaxy.id,
     )
 
 
@@ -114,6 +116,7 @@ async def recall(body: RecallRequest, user: User = Depends(get_current_user), ga
         body.query, body.cognitive_mode, body.planet, body.biome,
         body.context_window, body.include_reasoning, body.include_graph_paths,
         body.recency_weight, body.limit, body.session_id,
+        galaxy_id=galaxy.id,
     )
 
 
@@ -122,49 +125,52 @@ async def calibrate(body: CalibrateRequest, user: User = Depends(get_current_use
     return await tools_brain.brain_calibrate(
         body.session_id, body.records_used, body.records_retrieved_unused,
         body.knowledge_gaps, body.session_outcome, body.knowledge_quality_score,
+        galaxy_id=galaxy.id,
     )
 
 
 @router.get("/health/{agent_name}")
 async def health(agent_name: str, user: User = Depends(get_current_user), galaxy: Galaxy = Depends(get_galaxy_for_user)):
-    return await tools_brain.brain_health(agent_name)
+    return await tools_brain.brain_health(agent_name, galaxy_id=galaxy.id)
 
 
 @router.post("/know")
 async def know(body: KnowRequest, user: User = Depends(get_current_user), galaxy: Galaxy = Depends(get_galaxy_for_user)):
-    return await tools_brain.brain_know(body.concept, body.depth)
+    return await tools_brain.brain_know(body.concept, body.depth, galaxy_id=galaxy.id)
 
 
 @router.post("/graph-query")
 async def graph_query(body: GraphQueryRequest, user: User = Depends(get_current_user), galaxy: Galaxy = Depends(get_galaxy_for_user)):
     return await tools_brain.brain_graph_query(
         body.entity_name, body.relationship_types, body.depth,
+        galaxy_id=galaxy.id,
     )
 
 
 @router.post("/find-path")
 async def find_path(body: FindPathRequest, user: User = Depends(get_current_user), galaxy: Galaxy = Depends(get_galaxy_for_user)):
-    result = await tools_brain.brain_find_path(body.source_concept, body.target_concept)
+    result = await tools_brain.brain_find_path(body.source_concept, body.target_concept, galaxy_id=galaxy.id)
     return result or {"path": None, "message": "No path found"}
 
 
 @router.post("/context")
 async def context(body: ContextRequest, user: User = Depends(get_current_user), galaxy: Galaxy = Depends(get_galaxy_for_user)):
-    return await tools_memory.memory_context(body.planet, body.biome, body.max_tokens, body.model)
+    return await tools_memory.memory_context(body.planet, body.biome, body.max_tokens, body.model, galaxy_id=galaxy.id)
 
 
 @router.post("/write")
 async def write(body: WriteRequest, user: User = Depends(get_current_user), galaxy: Galaxy = Depends(get_galaxy_for_user)):
     return await tools_memory.memory_write(
         body.content, body.planet, body.biome, body.region, body.context_tags, body.gravity,
+        galaxy_id=galaxy.id,
     )
 
 
 @router.post("/entity-get")
 async def entity_get(body: EntityGetRequest, user: User = Depends(get_current_user), galaxy: Galaxy = Depends(get_galaxy_for_user)):
-    return await tools_memory.memory_entity_get(body.entity_name, body.planet)
+    return await tools_memory.memory_entity_get(body.entity_name, body.planet, galaxy_id=galaxy.id)
 
 
 @router.get("/status")
 async def status(user: User = Depends(get_current_user), galaxy: Galaxy = Depends(get_galaxy_for_user)):
-    return await tools_memory.memory_status()
+    return await tools_memory.memory_status(galaxy_id=galaxy.id)

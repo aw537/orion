@@ -12,9 +12,10 @@ async def brain_orient(
     agent_name: str, model: str, agent_type: str = "GENERAL",
     active_planet: str | None = None, active_biome: str | None = None,
     max_tokens: int | None = None,
+    galaxy_id: str | None = None,
 ) -> dict:
     """Orient yourself in your Galaxy at the start of every session."""
-    galaxy_id = await _get_galaxy_id()
+    galaxy_id = galaxy_id or await _get_galaxy_id()
     if not galaxy_id:
         return {"error": "No galaxy found"}
 
@@ -56,9 +57,10 @@ async def brain_think(
     reasoning: str | None = None, supersedes: list[str] | None = None,
     scope: str = "BIOME", context_tags: list[str] | None = None,
     session_id: str | None = None, agent_name: str | None = None,
+    galaxy_id: str | None = None,
 ) -> dict:
     """Integrate new understanding into your brain. Planet is auto-routed if not specified."""
-    galaxy_id = await _get_galaxy_id()
+    galaxy_id = galaxy_id or await _get_galaxy_id()
     if not galaxy_id:
         return {"error": "No galaxy found"}
 
@@ -132,9 +134,10 @@ async def brain_recall(
     context_window: str | None = None, include_reasoning: bool = False,
     include_graph_paths: bool = False, recency_weight: float = 0.3,
     limit: int = 5, session_id: str | None = None,
+    galaxy_id: str | None = None,
 ) -> dict:
     """Access knowledge from your brain with graph-enhanced retrieval."""
-    galaxy_id = await _get_galaxy_id()
+    galaxy_id = galaxy_id or await _get_galaxy_id()
     if not galaxy_id:
         return {"records": [], "retrieval_metadata": {"error": "No galaxy found"}}
 
@@ -206,9 +209,10 @@ async def brain_calibrate(
     knowledge_gaps: list[str] | None = None,
     session_outcome: str | None = None,
     knowledge_quality_score: float | None = None,
+    galaxy_id: str | None = None,
 ) -> dict:
     """Teach your brain what was useful this session."""
-    galaxy_id = await _get_galaxy_id()
+    galaxy_id = galaxy_id or await _get_galaxy_id()
     if not galaxy_id:
         return {"error": "No galaxy found"}
 
@@ -231,9 +235,9 @@ async def brain_calibrate(
         return result
 
 
-async def brain_health(agent_name: str) -> dict:
+async def brain_health(agent_name: str, galaxy_id: str | None = None) -> dict:
     """Assess the current cognitive health of your brain."""
-    galaxy_id = await _get_galaxy_id()
+    galaxy_id = galaxy_id or await _get_galaxy_id()
     if not galaxy_id:
         return {"error": "No galaxy found"}
 
@@ -249,9 +253,9 @@ async def brain_health(agent_name: str) -> dict:
         return result
 
 
-async def brain_know(concept: str, depth: str = "summary") -> dict:
+async def brain_know(concept: str, depth: str = "summary", galaxy_id: str | None = None) -> dict:
     """Access your synthesized understanding of a concept."""
-    galaxy_id = await _get_galaxy_id()
+    galaxy_id = galaxy_id or await _get_galaxy_id()
     if not galaxy_id:
         return {"error": "No galaxy found"}
 
@@ -297,9 +301,10 @@ async def brain_know(concept: str, depth: str = "summary") -> dict:
 
 async def brain_graph_query(
     entity_name: str, relationship_types: list[str] | None = None, depth: int = 2,
+    galaxy_id: str | None = None,
 ) -> dict:
     """Traverse the knowledge graph from an entity."""
-    galaxy_id = await _get_galaxy_id()
+    galaxy_id = galaxy_id or await _get_galaxy_id()
     if not galaxy_id:
         return {"error": "No galaxy found"}
 
@@ -318,9 +323,9 @@ async def brain_graph_query(
         return neighborhood
 
 
-async def brain_find_path(source_concept: str, target_concept: str) -> dict | None:
+async def brain_find_path(source_concept: str, target_concept: str, galaxy_id: str | None = None) -> dict | None:
     """Find the connection between two concepts in your knowledge graph."""
-    galaxy_id = await _get_galaxy_id()
+    galaxy_id = galaxy_id or await _get_galaxy_id()
     if not galaxy_id:
         return {"error": "No galaxy found"}
 
