@@ -25,6 +25,12 @@ async def get_current_user(
         # Return the first persisted user if one exists
         user = (await db.execute(select(User).limit(1))).scalar_one_or_none()
         if user:
+            # Bind to galaxy if the user was created before onboarding completed
+            if not user.galaxy_id:
+                galaxy = (await db.execute(select(Galaxy).limit(1))).scalar_one_or_none()
+                if galaxy:
+                    user.galaxy_id = galaxy.id
+                    await db.commit()
             return user
         # No user yet — create and persist a local dev user bound to first Galaxy
         galaxy = (await db.execute(select(Galaxy).limit(1))).scalar_one_or_none()

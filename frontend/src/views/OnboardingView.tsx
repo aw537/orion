@@ -63,7 +63,10 @@ export default function OnboardingView() {
   const [steeringDocContent, setSteeringDocContent] = useState<string | null>(null);
   const [customTemplateFile, setCustomTemplateFile] = useState<File | null>(null);
   const [customTemplateName, setCustomTemplateName] = useState('');
+  const [selectedFiles, setSelectedFiles] = useState<File[] | null>(null);
+  const [selectedFolderName, setSelectedFolderName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingLabel, setLoadingLabel] = useState('Creating…');
   const [submitError, setSubmitError] = useState('');
   const nameRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
@@ -84,8 +87,10 @@ export default function OnboardingView() {
   }, [step, role, templateId, source, importPath, biomeName, userName, goal, commStyle, tools, contradictionPref, steeringDocPath]);
 
   useEffect(() => {
-    if (source === 'obsidian' && !importPath) setImportPath('/vault');
+    if (source === 'obsidian' && !importPath && !selectedFiles) setImportPath('/vault');
     else if (source !== 'obsidian' && importPath === '/vault') setImportPath('');
+    setSelectedFiles(null);
+    setSelectedFolderName('');
   }, [source]);
 
   useEffect(() => {
@@ -101,13 +106,14 @@ export default function OnboardingView() {
   const handleFinish = async () => {
     if (loading) return;
     setLoading(true);
+    setLoadingLabel('Creating…');
     setSubmitError('');
     try {
-      const result = await apiClient.post<{ import_started: boolean }>('/api/v1/onboarding/start', {
+      const result = await apiClient.post<{ import_started: boolean; galaxy_id: string }>('/api/v1/onboarding/start', {
         role: role === 'founder' ? 'Technical Founder' : role.charAt(0).toUpperCase() + role.slice(1),
         template_id: templateId || null,
         first_biome_name: biomeName || 'General',
-        import_path: source !== 'empty' && importPath.trim() ? importPath.trim() : null,
+        import_path: source !== 'empty' && !selectedFiles && importPath.trim() ? importPath.trim() : null,
         source_type: source,
         name: userName,
         goal,
@@ -118,9 +124,22 @@ export default function OnboardingView() {
         steering_doc_content: steeringDocContent,
       });
       qc.invalidateQueries({ queryKey: ['galaxy'] });
-      if (source !== 'empty' && importPath.trim() && !result.import_started) {
+
+      if (selectedFiles && selectedFiles.length > 0) {
+        setLoadingLabel(`Importing ${selectedFiles.length} files…`);
+        const formData = new FormData();
+        for (const file of selectedFiles) {
+          formData.append('files', file, file.webkitRelativePath || file.name);
+        }
+        const base = import.meta.env.VITE_API_URL || '';
+        await fetch(`${base}/api/v1/onboarding/import-files?galaxy_id=${result.galaxy_id}`, {
+          method: 'POST',
+          body: formData,
+        });
+      } else if (source !== 'empty' && importPath.trim() && !result.import_started) {
         setImportWarning(`Vault import could not start — path "${importPath}" was not accessible from the server. Your Galaxy was created, but you can re-import later from Settings.`);
       }
+
       clearProgress();
       navigate('/');
     } catch (err: unknown) {
@@ -345,20 +364,30 @@ export default function OnboardingView() {
               {source !== 'empty' && (
                 <div className="mt-4">
                   <div className="flex gap-2">
-                    <input
-                      value={importPath}
-                      onChange={(e) => setImportPath(e.target.value)}
-                      placeholder={source === 'obsidian' ? '/vault' : source === 'git' ? '~/projects/my-repo' : '~/Documents/notes'}
-                      className="flex-1 h-10 px-3.5 bg-[var(--surface-3)] border border-[var(--border-soft)] rounded-lg text-sm text-[var(--text-1)] placeholder:text-[var(--text-3)] outline-none focus:border-[var(--violet-300)] transition-colors duration-150"
-                    />
+                    {selectedFiles ? (
+                      <div className="flex-1 h-10 px-3.5 flex items-center justify-between bg-[var(--surface-3)] border border-[var(--violet-300)] rounded-lg text-sm text-[var(--text-1)]">
+                        <span className="truncate"><span className="font-mono text-[var(--violet-300)]">{selectedFolderName}</span><span className="text-[var(--text-3)] ml-1.5">· {selectedFiles.length} files selected</span></span>
+                        <button onClick={() => { setSelectedFiles(null); setSelectedFolderName(''); }} className="ml-2 text-[var(--text-3)] hover:text-[var(--text-1)] flex-shrink-0">×</button>
+                      </div>
+                    ) : (
+                      <input
+                        value={importPath}
+                        onChange={(e) => setImportPath(e.target.value)}
+                        placeholder={source === 'obsidian' ? '/vault' : source === 'git' ? '~/projects/my-repo' : '~/Documents/notes'}
+                        className="flex-1 h-10 px-3.5 bg-[var(--surface-3)] border border-[var(--border-soft)] rounded-lg text-sm text-[var(--text-1)] placeholder:text-[var(--text-3)] outline-none focus:border-[var(--violet-300)] transition-colors duration-150"
+                      />
+                    )}
                     <label className="h-10 px-3.5 flex items-center gap-1.5 bg-[var(--surface-3)] border border-[var(--border-soft)] rounded-lg text-sm text-[var(--text-2)] cursor-pointer hover:border-[var(--violet-300)] hover:text-[var(--text-1)] transition-colors">
                       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 4.5A1.5 1.5 0 013.5 3h3.172a1.5 1.5 0 011.06.44l.768.767a1.5 1.5 0 001.06.439H12.5A1.5 1.5 0 0114 6.146V11.5a1.5 1.5 0 01-1.5 1.5h-9A1.5 1.5 0 012 11.5v-7z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
                       Browse
                       <input type="file" className="hidden" {...{ webkitdirectory: '', directory: '' } as any} onChange={(e) => {
                         const files = e.target.files;
                         if (files && files.length > 0) {
-                          const path = files[0].webkitRelativePath.split('/')[0];
-                          setImportPath(path);
+                          const folderName = files[0].webkitRelativePath.split('/')[0];
+                          const mdFiles = Array.from(files).filter(f => f.name.endsWith('.md') || f.name.endsWith('.markdown'));
+                          setSelectedFiles(mdFiles);
+                          setSelectedFolderName(folderName);
+                          setImportPath('');
                         }
                       }} />
                     </label>
@@ -564,7 +593,7 @@ export default function OnboardingView() {
                 <div className="flex gap-2.5">
                   <Button variant="ghost" onClick={() => setStep(6)}>Back</Button>
                   <Button variant="primary" kbd="↵" onClick={handleFinish} disabled={loading}>
-                    {loading ? 'Creating…' : 'Open my Galaxy'}
+                    {loading ? loadingLabel : 'Open my Galaxy'}
                   </Button>
                 </div>
               </div>

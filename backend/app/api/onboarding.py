@@ -4,7 +4,7 @@ import os
 import uuid
 from pathlib import Path
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File
 import yaml
 
 logger = logging.getLogger(__name__)
@@ -354,6 +354,10 @@ async def start_onboarding(body: OnboardingRequest, background_tasks: Background
 
     await db.commit()
 
+    # Ensure inbox planet and biome exist
+    from app.api.inbox import get_or_create_inbox_planet
+    await get_or_create_inbox_planet(galaxy_id, db)
+
     # Update planet registry in Sun
     await sun_service.update_planet_registry(galaxy_id)
 
@@ -402,11 +406,14 @@ _IMPORT_MAX_DEPTH = 5
 
 # Safe base directories for import/steering doc reads
 _SAFE_BASES = [
-    os.path.expanduser("~"),  # user home
+    os.path.expanduser("~"),  # user home (container)
     "/vault",                  # Docker-mounted vault
     "/tmp",                    # temp files
     "/app",                    # Docker working directory
 ]
+_host_home = os.environ.get("HOST_HOME", "")
+if _host_home:
+    _SAFE_BASES.append(_host_home)  # host home mounted at same path
 
 
 def _is_safe_path(resolved: str) -> bool:
@@ -416,6 +423,8 @@ def _is_safe_path(resolved: str) -> bool:
 
 def _validate_import_path(path: str) -> str:
     """Resolve and validate an import path. Rejects paths outside safe directories."""
+    if _host_home and path.startswith("~/"):
+        path = _host_home + path[1:]
     resolved = os.path.realpath(os.path.expanduser(path))
     if not os.path.isdir(resolved):
         raise HTTPException(400, f"Import path is not a directory: {path}")
@@ -428,6 +437,8 @@ def _read_steering_doc(path: str | None) -> str | None:
     """Read a markdown file from disk for the steering doc. Rejects paths outside safe directories."""
     if not path:
         return None
+    if _host_home and path.startswith("~/"):
+        path = _host_home + path[1:]
     resolved = os.path.realpath(os.path.expanduser(path))
     if not _is_safe_path(resolved):
         logger.warning(f"Steering doc path outside allowed directories: {resolved}")
@@ -455,3 +466,83 @@ async def import_markdown(planet_id: str, path: str, background_tasks: Backgroun
     from app.services import import_service
     background_tasks.add_task(import_service.import_markdown_folder, resolved, planet_id, galaxy.id)
     return {"status": "import_started", "planet_id": planet_id, "path": resolved}
+
+
+@router.post("/import-files")
+async def import_uploaded_files(
+    galaxy_id: str,
+    files: list[UploadFile] = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Accept markdown files uploaded directly from the browser (no filesystem path needed)."""
+    galaxy = (await db.execute(select(Galaxy).where(Galaxy.id == galaxy_id))).scalar_one_or_none()
+    if not galaxy:
+        raise HTTPException(404, "Galaxy not found")
+
+    planet = (await db.execute(
+        select(Planet).where(Planet.galaxy_id == galaxy_id).limit(1)
+    )).scalar_one_or_none()
+    if not planet:
+        raise HTTPException(404, "No planet found for galaxy")
+
+    from app.services import stardust_service
+    from app.services.import_service import parse_frontmatter, chunk_by_paragraph, _get_or_create_planet, _get_or_create_biome
+    from app.extraction.signal_detector import infer_region_from_content
+
+    def _clean(name: str) -> str:
+        return name.replace("_", " ").replace("-", " ").title()
+
+    imported = 0
+    for upload in files:
+        try:
+            content = (await upload.read()).decode("utf-8", errors="ignore")
+            if not content.strip():
+                continue
+
+            # webkitRelativePath sent as filename: e.g. "Vault/TopFolder/SubFolder/file.md"
+            # parts[0] = vault root (skip), parts[1] = planet, parts[2] = biome
+            relative_path = upload.filename or "unknown.md"
+            parts = Path(relative_path).parts
+            remaining = parts[1:]  # strip vault root
+
+            if len(remaining) <= 1:
+                cur_planet_id = planet.id
+                cur_planet_name = planet.name
+                biome_name = "General"
+            elif len(remaining) == 2:
+                cur_planet_name = _clean(remaining[0])
+                cur_planet_id = await _get_or_create_planet(galaxy_id, cur_planet_name)
+                biome_name = "General"
+            else:
+                cur_planet_name = _clean(remaining[0])
+                cur_planet_id = await _get_or_create_planet(galaxy_id, cur_planet_name)
+                biome_name = _clean(remaining[1])
+
+            await _get_or_create_biome(cur_planet_id, galaxy_id, biome_name)
+
+            frontmatter, body = parse_frontmatter(content)
+            if not body.strip():
+                continue
+
+            region = infer_region_from_content(body)
+            tags = frontmatter.get("tags", [])
+            if isinstance(tags, str):
+                tags = [tags] if tags else []
+
+            chunks = chunk_by_paragraph(body)
+            for chunk in chunks:
+                if len(chunk.strip()) < 10:
+                    continue
+                await stardust_service.write_stardust(
+                    content=chunk, galaxy_id=galaxy_id,
+                    planet_name=cur_planet_name, biome_name=biome_name,
+                    region=region, gravity="BIOME", confidence=0.5,
+                    source_agent="importer", context_tags=tags,
+                    filename=relative_path,
+                )
+                imported += 1
+        except Exception as e:
+            logger.warning(f"Failed to import uploaded file {upload.filename}: {e}")
+
+    logger.info(f"Browser upload complete: {imported} stardust from {len(files)} files")
+    return {"imported": imported, "file_count": len(files)}
