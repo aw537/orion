@@ -76,7 +76,11 @@ export default function GalaxyView() {
     <div className="fixed inset-0">
       <GalaxyCanvas
         galaxy={galaxy}
-        onPlanetClick={(id) => navigate(`/planet/${id}`)}
+        onPlanetClick={(id) => {
+          const planet = galaxy.planets?.find((p: any) => p.id === id);
+          if (planet?.planet_type === 'inbox') navigate('/inbox');
+          else navigate(`/planet/${id}`);
+        }}
         onSunClick={() => setSunOpen(true)}
       />
 

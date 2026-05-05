@@ -1,9 +1,10 @@
-"""002 — Merge phase flags + contradiction dedup constraint.
+"""002 — Merge phase flags, contradiction dedup constraint, planet_type.
 
 - Adds reconciliation_done / bridging_done booleans to merge_proposals so
   execute_merge can skip phases that already ran even when their counts are zero.
 - Deduplicates existing contradiction pairs and adds a unique constraint on
   (record_a_id, record_b_id) to prevent re-insertion across audit runs.
+- Adds planet_type column to planets ("standard" | "inbox").
 """
 
 from alembic import op
@@ -43,8 +44,27 @@ def upgrade():
         "uq_contradiction_pair", "contradictions", ["record_a_id", "record_b_id"]
     )
 
+    # ── planet_type ──────────────────────────────────────────────────
+    op.add_column("planets",
+        sa.Column("planet_type", sa.Text(), nullable=False, server_default="standard"))
+
+    # ── inbox_ingestions table ────────────────────────────────────────
+    op.create_table(
+        "inbox_ingestions",
+        sa.Column("id", sa.Text(), primary_key=True),
+        sa.Column("galaxy_id", sa.Text(), sa.ForeignKey("galaxies.id"), nullable=False),
+        sa.Column("filename", sa.Text(), nullable=False),
+        sa.Column("status", sa.Text(), server_default="complete"),
+        sa.Column("chunks_total", sa.Integer(), server_default="0"),
+        sa.Column("chunks_routed", sa.Integer(), server_default="0"),
+        sa.Column("results_json", sa.Text(), nullable=True),
+        sa.Column("created_at", sa.DateTime(), server_default=sa.func.now()),
+    )
+
 
 def downgrade():
+    op.drop_table("inbox_ingestions")
+    op.drop_column("planets", "planet_type")
     op.drop_constraint("uq_contradiction_pair", "contradictions", type_="unique")
     op.drop_column("merge_proposals", "bridging_done")
     op.drop_column("merge_proposals", "reconciliation_done")

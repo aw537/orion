@@ -10,6 +10,7 @@ from app.models.profiles import StrengthHistory, ModelProfile, SubagentSession
 from app.models.user import User, UserSession, PlanetAccessGrant, PermissionCheck, GalaxyInvite
 from app.models.merge import MergeProposal, EntityMergeMapping
 from app.models.routing_log import RoutingLog
+from app.models.inbox import InboxIngestion
 from app.models.brain import (
     AgentIdentity, AgentSession, AgentExpertise,
     ModelSwitchLog, TransitionOrientation,
@@ -25,6 +26,7 @@ __all__ = [
     "User", "UserSession", "PlanetAccessGrant", "PermissionCheck", "GalaxyInvite",
     "MergeProposal", "EntityMergeMapping",
     "RoutingLog",
+    "InboxIngestion",
     "AgentIdentity", "AgentSession", "AgentExpertise",
     "ModelSwitchLog", "TransitionOrientation",
     "SessionCalibration", "KnowledgeIntegrationLog",
