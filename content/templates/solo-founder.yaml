@@ -1,0 +1,48 @@
+name: "Solo Founder"
+description: "Building a product alone or with a tiny team. Covers code, product decisions, customers, and growth — all in one Galaxy."
+icon: "globe"
+
+planets:
+  - name: Engineering
+    color: "#6D28D9"
+    biomes:
+      - name: "Core Product"
+  - name: Product
+    color: "#F59E0B"
+    biomes:
+      - name: "Strategy & Roadmap"
+      - name: "Customer Insights"
+  - name: Personal
+    color: "#0EA5E9"
+    biomes:
+      - name: "Founder Journal"
+
+sun:
+  principles:
+    - "Bias toward shipping. Record decisions quickly and move on."
+    - "Capture customer quotes verbatim — they're gold for future decisions."
+    - "Flag scope creep: if a task grows beyond its original intent, note it."
+    - "Prefer concrete examples over abstract explanations."
+  write_rules:
+    - "Record every customer conversation with: who, what they said, what we learned."
+    - "Log product decisions with the constraint that drove them (time, money, scope)."
+    - "Capture 'why not' decisions — things you chose NOT to build and why."
+  communication_style: "direct"
+
+seed_stardust:
+  - content: "Principle: Ship first, polish later. Perfect is the enemy of launched."
+    region: "analytical"
+    gravity: "GALAXY"
+  - content: "Convention: Customer feedback goes in Product/Customer Insights, not Engineering."
+    region: "procedural"
+    gravity: "GALAXY"
+  - content: "Convention: Weekly founder journal entry — wins, blockers, next week's focus."
+    region: "procedural"
+    gravity: "PLANET"
+    planet: "Personal"
+
+entities:
+  - name: "MVP"
+    type: "concept"
+  - name: "Customer Discovery"
+    type: "concept"

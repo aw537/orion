@@ -1,0 +1,50 @@
+name: "Open Source Maintainer"
+description: "Managing a public project. Tracks contributors, issues, releases, and community decisions with full transparency."
+icon: "git-branch"
+
+planets:
+  - name: Engineering
+    color: "#6D28D9"
+    biomes:
+      - name: "Core Library"
+      - name: "CI & Releases"
+  - name: Product
+    color: "#F59E0B"
+    biomes:
+      - name: "Roadmap & RFCs"
+      - name: "Community"
+  - name: Personal
+    color: "#0EA5E9"
+
+sun:
+  principles:
+    - "Public decisions need public rationale. Record the 'why' for every breaking change."
+    - "Contributor context matters — note who proposed what and their use case."
+    - "Semantic versioning is law. Breaking changes = major bump, always."
+    - "Flag contradictions rather than silently overwriting."
+  write_rules:
+    - "Record breaking changes with migration path for users."
+    - "Log RFC decisions with: proposal, discussion summary, outcome, dissenters."
+    - "Capture release notes as they happen — don't batch at release time."
+    - "Note contributor agreements and licensing decisions."
+  communication_style: "thorough"
+
+seed_stardust:
+  - content: "Convention: Every breaking change requires a migration guide in the changelog."
+    region: "procedural"
+    gravity: "GALAXY"
+  - content: "Convention: RFCs live in Product/Roadmap & RFCs. Implementation goes in Engineering."
+    region: "procedural"
+    gravity: "GALAXY"
+  - content: "Convention: Release branches follow the pattern release/vX.Y.Z. Tags are vX.Y.Z."
+    region: "procedural"
+    gravity: "PLANET"
+    planet: "Engineering"
+
+entities:
+  - name: "Semantic Versioning"
+    type: "concept"
+  - name: "GitHub"
+    type: "tool"
+  - name: "CI/CD"
+    type: "concept"

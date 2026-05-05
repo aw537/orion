@@ -1,0 +1,54 @@
+name: "ML & Research"
+description: "For machine learning projects and research workflows. Tracks experiments, papers, datasets, and model iterations."
+icon: "microscope"
+
+planets:
+  - name: Research
+    color: "#10B981"
+    biomes:
+      - name: "Experiments"
+      - name: "Literature"
+  - name: Engineering
+    color: "#6D28D9"
+    biomes:
+      - name: "Model Pipeline"
+      - name: "Data Infrastructure"
+  - name: Personal
+    color: "#0EA5E9"
+
+sun:
+  principles:
+    - "Always record experiment parameters and results — even failed runs."
+    - "Cite papers with author-year format and link to source."
+    - "Distinguish between hypothesis, observation, and conclusion."
+    - "Flag when a result contradicts a prior finding."
+  write_rules:
+    - "Log every experiment with: hypothesis, parameters, result, interpretation."
+    - "Record dataset versions and preprocessing steps."
+    - "Capture model architecture decisions with alternatives considered."
+    - "Note reproducibility requirements for each experiment."
+  communication_style: "thorough"
+
+seed_stardust:
+  - content: "Convention: Every experiment gets a unique ID and is logged with full hyperparameters before running."
+    region: "procedural"
+    gravity: "PLANET"
+    planet: "Research"
+  - content: "Convention: Models are versioned with their training data hash. Never overwrite a trained model."
+    region: "procedural"
+    gravity: "PLANET"
+    planet: "Engineering"
+  - content: "Convention: Literature notes follow the format: Summary → Key Claims → Relevance to Our Work → Open Questions."
+    region: "procedural"
+    gravity: "PLANET"
+    planet: "Research"
+
+entities:
+  - name: "Python"
+    type: "tool"
+  - name: "PyTorch"
+    type: "tool"
+  - name: "Jupyter"
+    type: "tool"
+  - name: "Experiment Tracking"
+    type: "concept"

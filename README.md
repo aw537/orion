@@ -28,14 +28,15 @@ First startup takes a few minutes — Ollama downloads the embedding model (`nom
 
 ### 2. Create your Galaxy
 
-Open `http://localhost:3000` and complete the onboarding wizard (6 steps, all skippable):
+Open `http://localhost:3000` and complete the onboarding wizard (7 steps, all skippable):
 
 1. **Role** — your role determines the default Planet structure
-2. **Import source** — local folder, Obsidian vault, Git repo, or start empty
-3. **Name your first Biome** — name your first project context
-4. **About you** — name, communication style, current goal
-5. **Steering document** — import a CLAUDE.md or custom agent rules file
-6. **Tools & preferences** — technologies you use, contradiction handling
+2. **Galaxy template** — pick a pre-configured template (Full-Stack SaaS, ML & Research, Open Source, Solo Founder) or start from scratch
+3. **Import source** — local folder, Obsidian vault, Git repo, or start empty
+4. **Name your first Biome** — name your first project context
+5. **About you** — name, communication style, current goal
+6. **Steering document** — import a CLAUDE.md or custom agent rules file
+7. **Tools & preferences** — technologies you use, contradiction handling
 
 Or via CLI:
 

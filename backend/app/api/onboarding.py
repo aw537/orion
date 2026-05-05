@@ -2,8 +2,10 @@ import json
 import logging
 import os
 import uuid
+from pathlib import Path
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+import yaml
 
 logger = logging.getLogger(__name__)
 from pydantic import BaseModel
@@ -15,6 +17,57 @@ from app.services import nebula_service, sun_service
 from app.storage.chroma_client import ChromaClient, get_chroma_client
 
 router = APIRouter(prefix="/api/v1/onboarding", tags=["onboarding"])
+
+# --- Galaxy Templates ---
+
+_TEMPLATES_DIR = Path(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))).joinpath("content", "templates")
+
+
+def _load_templates() -> list[dict]:
+    """Load all YAML templates from content/templates/."""
+    templates = []
+    if not _TEMPLATES_DIR.is_dir():
+        return templates
+    for f in sorted(_TEMPLATES_DIR.glob("*.yaml")):
+        try:
+            data = yaml.safe_load(f.read_text())
+            data["id"] = f.stem
+            templates.append(data)
+        except Exception as e:
+            logger.warning(f"Failed to load template {f.name}: {e}")
+    return templates
+
+
+def _get_template(template_id: str) -> dict | None:
+    path = _TEMPLATES_DIR / f"{template_id}.yaml"
+    if not path.is_file():
+        return None
+    try:
+        data = yaml.safe_load(path.read_text())
+        data["id"] = path.stem
+        return data
+    except Exception:
+        return None
+
+
+@router.get("/templates")
+async def list_templates():
+    """Return available Galaxy templates for the onboarding wizard."""
+    templates = _load_templates()
+    return [
+        {
+            "id": t["id"],
+            "name": t["name"],
+            "description": t.get("description", ""),
+            "icon": t.get("icon", ""),
+            "planets": [
+                {"name": p["name"], "color": p.get("color", "#6B7280"), "biomes": [b["name"] for b in p.get("biomes", [])]}
+                for p in t.get("planets", [])
+            ],
+        }
+        for t in templates
+    ]
+
 
 PLANET_COLORS = {"Engineering": "#6D28D9", "Personal": "#0EA5E9", "Product": "#F59E0B", "Design": "#EC4899", "Research": "#10B981", "General": "#6B7280"}
 
@@ -46,6 +99,7 @@ class ArchitecturalDecision(BaseModel):
 
 class OnboardingRequest(BaseModel):
     role: str
+    template_id: str | None = None
     import_path: str | None = None
     source_type: str = "folder"
     first_biome_name: str = "General"
@@ -118,25 +172,56 @@ async def start_onboarding(body: OnboardingRequest, background_tasks: Background
     # Create galaxy
     await db.execute(insert(Galaxy).values(id=galaxy_id, name=f"{body.role}'s Galaxy", created_at=now))
 
-    # Create planets based on role
-    planet_names = ROLE_PLANETS.get(body.role, ["General", "Personal"])
+    # Load template if provided
+    template = _get_template(body.template_id) if body.template_id else None
+
+    # Create planets and biomes — from template or role defaults
     planet_ids = {}
-    for name in planet_names:
-        pid = str(uuid.uuid4())
-        planet_ids[name] = pid
-        await db.execute(insert(Planet).values(id=pid, galaxy_id=galaxy_id, name=name, color=PLANET_COLORS.get(name, "#6D28D9")))
+    biome_id = None
+    first_planet_id = None
 
-    # Create first biome
-    first_planet_id = planet_ids[planet_names[0]]
-    biome_id = str(uuid.uuid4())
-    await db.execute(insert(Biome).values(id=biome_id, planet_id=first_planet_id, galaxy_id=galaxy_id, name=body.first_biome_name, lifecycle_state="ACTIVE", created_at=now, last_active_at=now))
+    if template:
+        planet_names = []
+        for tp in template.get("planets", []):
+            pid = str(uuid.uuid4())
+            name = tp["name"]
+            planet_names.append(name)
+            planet_ids[name] = pid
+            await db.execute(insert(Planet).values(id=pid, galaxy_id=galaxy_id, name=name, color=tp.get("color", PLANET_COLORS.get(name, "#6D28D9"))))
+            for tb in tp.get("biomes", []):
+                bid = str(uuid.uuid4())
+                await db.execute(insert(Biome).values(id=bid, planet_id=pid, galaxy_id=galaxy_id, name=tb["name"], lifecycle_state="ACTIVE", created_at=now, last_active_at=now))
+                if biome_id is None:
+                    biome_id = bid
+                    first_planet_id = pid
+        if not planet_names:
+            planet_names = ["General", "Personal"]
+    else:
+        planet_names = ROLE_PLANETS.get(body.role, ["General", "Personal"])
+        for name in planet_names:
+            pid = str(uuid.uuid4())
+            planet_ids[name] = pid
+            await db.execute(insert(Planet).values(id=pid, galaxy_id=galaxy_id, name=name, color=PLANET_COLORS.get(name, "#6D28D9")))
+        first_planet_id = planet_ids[planet_names[0]]
 
-    # Initialize Sun with role defaults + wizard answers
-    role_defaults = ROLE_SUN_DEFAULTS.get(body.role, ROLE_SUN_DEFAULTS.get("Developer", {}))
+    # Ensure at least one biome exists (from body.first_biome_name or template)
+    if biome_id is None:
+        if first_planet_id is None:
+            first_planet_id = planet_ids[planet_names[0]]
+        biome_id = str(uuid.uuid4())
+        await db.execute(insert(Biome).values(id=biome_id, planet_id=first_planet_id, galaxy_id=galaxy_id, name=body.first_biome_name, lifecycle_state="ACTIVE", created_at=now, last_active_at=now))
+
+    # Initialize Sun with template or role defaults + wizard answers
+    if template and template.get("sun"):
+        tsun = template["sun"]
+        role_defaults = {"principles": tsun.get("principles", []), "write_rules": tsun.get("write_rules", [])}
+    else:
+        role_defaults = ROLE_SUN_DEFAULTS.get(body.role, ROLE_SUN_DEFAULTS.get("Developer", {}))
+
     wizard = {
         "name": body.name,
         "role": body.role,
-        "communication_style": body.communication_style,
+        "communication_style": body.communication_style if body.communication_style != "direct" else (template.get("sun", {}).get("communication_style", "direct") if template else "direct"),
         "contradiction_preference": body.contradiction_preference,
         "principles": role_defaults.get("principles", []),
         "write_rules": role_defaults.get("write_rules", []),
@@ -247,6 +332,23 @@ async def start_onboarding(body: OnboardingRequest, background_tasks: Background
 
     # Update biome/planet counts
     from sqlalchemy import update
+
+    # Template: seed stardust and entities from template definition
+    if template:
+        for tsd in template.get("seed_stardust", []):
+            target_planet_id = planet_ids.get(tsd.get("planet"), "") or first_planet_id
+            sd = Stardust(
+                id=str(uuid.uuid4()), biome_id=biome_id, planet_id=target_planet_id, galaxy_id=galaxy_id,
+                content=tsd["content"], region=tsd.get("region", "procedural"), gravity=tsd.get("gravity", "PLANET"),
+                confidence=0.85, valid_from=now, source_agent="onboarding-template", created_at=now,
+            )
+            sd.context_tags = []
+            db.add(sd)
+            stardust_count += 1
+        for tent in template.get("entities", []):
+            db.add(Entity(id=str(uuid.uuid4()), galaxy_id=galaxy_id, planet_id=first_planet_id, name=tent["name"], entity_type=tent.get("type", "tool")))
+            entities_count += 1
+
     await db.execute(update(Biome).where(Biome.id == biome_id).values(stardust_count=stardust_count))
     await db.execute(update(Planet).where(Planet.id == first_planet_id).values(stardust_count=stardust_count))
 

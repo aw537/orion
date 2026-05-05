@@ -19,10 +19,14 @@ const SOURCES = [
   { value: 'empty', name: 'Empty Galaxy', desc: 'Start blank. Agents fill it as you work.', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/></svg> },
 ];
 
+const TOTAL_STEPS = 7;
 const STORAGE_KEY = 'orion-onboarding-progress';
 
+interface TemplatePlanet { name: string; color: string; biomes: string[]; }
+interface Template { id: string; name: string; description: string; icon: string; planets: TemplatePlanet[]; }
+
 interface OnboardingState {
-  step: number; role: string; source: string; importPath: string;
+  step: number; role: string; templateId: string | null; source: string; importPath: string;
   biomeName: string; userName: string; goal: string; commStyle: string;
   tools: string[]; contradictionPref: string; steeringDocPath: string;
 }
@@ -43,6 +47,8 @@ export default function OnboardingView() {
   const saved = loadProgress();
   const [step, setStep] = useState(saved.step || 1);
   const [role, setRole] = useState(saved.role || 'developer');
+  const [templateId, setTemplateId] = useState<string | null>((saved as any).templateId || null);
+  const [templates, setTemplates] = useState<Template[]>([]);
   const [source, setSource] = useState(saved.source || 'folder');
   const [importPath, setImportPath] = useState(saved.importPath || '');
   const [importWarning, setImportWarning] = useState('');
@@ -55,20 +61,27 @@ export default function OnboardingView() {
   const [contradictionPref, setContradictionPref] = useState(saved.contradictionPref || 'flag_and_ask');
   const [steeringDocPath, setSteeringDocPath] = useState(saved.steeringDocPath || '');
   const [steeringDocContent, setSteeringDocContent] = useState<string | null>(null);
+  const [customTemplateFile, setCustomTemplateFile] = useState<File | null>(null);
+  const [customTemplateName, setCustomTemplateName] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const nameRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const qc = useQueryClient();
 
+  // Fetch templates on mount
   useEffect(() => {
-    if (step === 3) setTimeout(() => nameRef.current?.focus(), 50);
+    apiClient.get<Template[]>('/api/v1/onboarding/templates').then(setTemplates).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (step === 4) setTimeout(() => nameRef.current?.focus(), 50);
   }, [step]);
 
   // Persist progress
   useEffect(() => {
-    saveProgress({ step, role, source, importPath, biomeName, userName, goal, commStyle, tools, contradictionPref, steeringDocPath });
-  }, [step, role, source, importPath, biomeName, userName, goal, commStyle, tools, contradictionPref, steeringDocPath]);
+    saveProgress({ step, role, templateId, source, importPath, biomeName, userName, goal, commStyle, tools, contradictionPref, steeringDocPath } as any);
+  }, [step, role, templateId, source, importPath, biomeName, userName, goal, commStyle, tools, contradictionPref, steeringDocPath]);
 
   useEffect(() => {
     if (source === 'obsidian' && !importPath) setImportPath('/vault');
@@ -77,13 +90,13 @@ export default function OnboardingView() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Enter') { if (step < 6) setStep(step + 1); else handleFinish(); }
+      if (e.key === 'Enter') { if (step < TOTAL_STEPS) setStep(step + 1); else handleFinish(); }
       else if (e.key === 'ArrowLeft' && step > 1) setStep(step - 1);
-      else if (e.key === 'ArrowRight' && step < 6) setStep(step + 1);
+      else if (e.key === 'ArrowRight' && step < TOTAL_STEPS) setStep(step + 1);
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [step, role, source, biomeName, userName, goal, tools, commStyle, contradictionPref, steeringDocPath]);
+  }, [step, role, templateId, source, biomeName, userName, goal, tools, commStyle, contradictionPref, steeringDocPath]);
 
   const handleFinish = async () => {
     if (loading) return;
@@ -92,6 +105,7 @@ export default function OnboardingView() {
     try {
       const result = await apiClient.post<{ import_started: boolean }>('/api/v1/onboarding/start', {
         role: role === 'founder' ? 'Technical Founder' : role.charAt(0).toUpperCase() + role.slice(1),
+        template_id: templateId || null,
         first_biome_name: biomeName || 'General',
         import_path: source !== 'empty' && importPath.trim() ? importPath.trim() : null,
         source_type: source,
@@ -138,7 +152,7 @@ export default function OnboardingView() {
 
       {/* Step switcher */}
       <div className="absolute top-6 right-1/2 translate-x-1/2 flex gap-1.5 z-[6]">
-        {[1, 2, 3, 4, 5, 6].map((s) => (
+        {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((s) => (
           <button
             key={s}
             onClick={() => setStep(s)}
@@ -153,8 +167,8 @@ export default function OnboardingView() {
       <div className="relative z-[1] w-[720px] bg-gradient-to-b from-[rgba(45,27,105,0.42)] to-[rgba(45,27,105,0.28)] border border-[var(--border)] rounded-[18px] px-16 pt-14 pb-12 shadow-[0_30px_80px_rgba(0,0,0,0.55),0_0_0_1px_rgba(124,58,237,0.08)_inset] backdrop-blur-[20px] animate-[rise_600ms_ease-expo]">
         {/* Step bar */}
         <div className="flex items-center gap-2 mb-7">
-          <span className="font-mono text-[11px] text-[var(--text-3)] tracking-[0.08em] uppercase mr-3.5">Step {step} of 6</span>
-          {[1, 2, 3, 4, 5, 6].map((s) => (
+          <span className="font-mono text-[11px] text-[var(--text-3)] tracking-[0.08em] uppercase mr-3.5">Step {step} of {TOTAL_STEPS}</span>
+          {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((s) => (
             <span key={s} className={`w-1.5 h-1.5 rounded-full transition-all duration-[250ms] ease-expo ${s === step ? 'bg-white shadow-[0_0_8px_rgba(255,255,255,0.4)]' : s < step ? 'bg-[var(--violet-300)]' : 'bg-[rgba(255,255,255,0.18)]'}`} />
           ))}
         </div>
@@ -192,6 +206,119 @@ export default function OnboardingView() {
           )}
 
           {step === 2 && (
+            <>
+              <h1 className="font-display text-[28px] font-semibold tracking-tight leading-tight mb-2">Choose a Galaxy template.</h1>
+              <p className="text-sm text-[var(--text-2)] leading-relaxed mb-8 max-w-[520px]">Templates pre-configure your Planets, Biomes, and best practices. Pick one to get started fast, or skip to build from scratch.</p>
+              <div className="grid grid-cols-2 gap-3">
+                {templates.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setTemplateId(templateId === t.id ? null : t.id)}
+                    className={`p-4 rounded-[12px] border text-left transition-all duration-150 cursor-pointer ${templateId === t.id ? 'border-[var(--violet-300)] bg-[rgba(124,58,237,0.16)]' : 'border-[var(--border-soft)] bg-[var(--surface-3)] hover:border-[var(--border)] hover:bg-[var(--surface-2)]'}`}
+                  >
+                    {/* Mini galaxy visualization */}
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="relative w-12 h-12 flex items-center justify-center">
+                        {/* Sun core */}
+                        <div className="w-3 h-3 rounded-full bg-[rgba(245,158,11,0.9)] shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
+                        {/* Orbiting planets */}
+                        {t.planets.map((p, i) => {
+                          const angle = (i / t.planets.length) * Math.PI * 2 - Math.PI / 2;
+                          const r = 16;
+                          const x = Math.cos(angle) * r;
+                          const y = Math.sin(angle) * r;
+                          return (
+                            <div
+                              key={p.name}
+                              className="absolute w-2.5 h-2.5 rounded-full shadow-[0_0_6px_var(--color)]"
+                              style={{ left: `calc(50% + ${x}px - 5px)`, top: `calc(50% + ${y}px - 5px)`, background: p.color, '--color': p.color } as React.CSSProperties}
+                            />
+                          );
+                        })}
+                        {/* Orbit ring */}
+                        <div className="absolute inset-1 rounded-full border border-[rgba(255,255,255,0.08)]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-[var(--text-1)] truncate">{t.name}</div>
+                        <div className="text-[11px] text-[var(--text-3)] mt-0.5">{t.planets.length} planets · {t.planets.reduce((n, p) => n + p.biomes.length, 0)} biomes</div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-[var(--text-3)] leading-relaxed line-clamp-2">{t.description}</p>
+                    {/* Planet/biome list */}
+                    <div className="mt-2.5 flex flex-wrap gap-1">
+                      {t.planets.map((p) => (
+                        <span key={p.name} className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border border-[var(--border-soft)] text-[var(--text-2)]">
+                          <span className="w-1.5 h-1.5 rounded-full" style={{ background: p.color }} />
+                          {p.name}
+                        </span>
+                      ))}
+                    </div>
+                  </button>
+                ))}
+                {/* Upload your own */}
+                <label
+                  className={`p-4 rounded-[12px] border text-left transition-all duration-150 cursor-pointer ${templateId === '__custom' ? 'border-[var(--violet-300)] bg-[rgba(124,58,237,0.16)]' : 'border-[var(--border-soft)] bg-[var(--surface-3)] hover:border-[var(--border)] hover:bg-[var(--surface-2)]'}`}
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="relative w-12 h-12 flex items-center justify-center">
+                      <svg className="w-5 h-5 text-[var(--violet-300)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                      <div className="absolute inset-1 rounded-full border border-dashed border-[rgba(124,58,237,0.3)]" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-[var(--text-1)]">Upload your own</div>
+                      <div className="text-[11px] text-[var(--text-3)] mt-0.5">YAML template file</div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-[var(--text-3)] leading-relaxed">Import a custom Galaxy template from a .yaml file.</p>
+                  <input type="file" accept=".yaml,.yml" className="hidden" onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      file.text().then((text) => {
+                        try {
+                          // Basic YAML-like parsing for the template preview (full parse happens on backend)
+                          const lines = text.split('\n');
+                          const nameLine = lines.find(l => l.startsWith('name:'));
+                          const descLine = lines.find(l => l.startsWith('description:'));
+                          const customName = nameLine?.replace('name:', '').trim().replace(/^["']|["']$/g, '') || file.name;
+                          const customDesc = descLine?.replace('description:', '').trim().replace(/^["']|["']$/g, '') || 'Custom uploaded template';
+                          // Store the file content for upload to backend
+                          setCustomTemplateFile(file);
+                          setCustomTemplateName(customName);
+                          setTemplateId('__custom');
+                        } catch { /* ignore parse errors */ }
+                      });
+                    }
+                  }} />
+                </label>
+                {/* Blank option */}
+                <button
+                  onClick={() => setTemplateId(null)}
+                  className={`p-4 rounded-[12px] border text-left transition-all duration-150 cursor-pointer ${templateId === null ? 'border-[var(--violet-300)] bg-[rgba(124,58,237,0.16)]' : 'border-[var(--border-soft)] bg-[var(--surface-3)] hover:border-[var(--border)] hover:bg-[var(--surface-2)]'}`}
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="relative w-12 h-12 flex items-center justify-center">
+                      <div className="w-3 h-3 rounded-full bg-[rgba(255,255,255,0.3)] border border-[rgba(255,255,255,0.2)]" />
+                      <div className="absolute inset-1 rounded-full border border-dashed border-[rgba(255,255,255,0.12)]" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-[var(--text-1)]">Start from scratch</div>
+                      <div className="text-[11px] text-[var(--text-3)] mt-0.5">Build your own structure</div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-[var(--text-3)] leading-relaxed">Use role-based defaults and configure everything manually in the following steps.</p>
+                </button>
+              </div>
+              <div className="flex items-center justify-between mt-8">
+                <span className="text-[11px] text-[var(--text-3)] cursor-pointer hover:text-[var(--text-2)]" onClick={() => { setTemplateId(null); setStep(3); }}>Skip — use role defaults</span>
+                <div className="flex gap-2.5">
+                  <Button variant="ghost" onClick={() => setStep(1)}>Back</Button>
+                  <Button variant="primary" kbd="↵" onClick={() => setStep(3)}>Continue</Button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {step === 3 && (
             <>
               <h1 className="font-display text-[28px] font-semibold tracking-tight leading-tight mb-2">Bring in what you already know.</h1>
               <p className="text-sm text-[var(--text-2)] leading-relaxed mb-8 max-w-[520px]">Pick one or skip — Orion will scan, extract entities, and seed your first Planets. Nothing leaves your machine.</p>
@@ -247,14 +374,14 @@ export default function OnboardingView() {
                   <span className="text-[#34D399]">Local-only</span> · indexes never leave this machine
                 </span>
                 <div className="flex gap-2.5">
-                  <Button variant="ghost" onClick={() => setStep(1)}>Back</Button>
-                  <Button variant="primary" kbd="↵" onClick={() => setStep(3)}>Continue</Button>
+                  <Button variant="ghost" onClick={() => setStep(2)}>Back</Button>
+                  <Button variant="primary" kbd="↵" onClick={() => setStep(4)}>Continue</Button>
                 </div>
               </div>
             </>
           )}
 
-          {step === 3 && (
+          {step === 4 && (
             <>
               <h1 className="font-display text-[28px] font-semibold tracking-tight leading-tight mb-2">Name your first Biome.</h1>
               <p className="text-sm text-[var(--text-2)] leading-relaxed mb-8 max-w-[520px]">A Biome is a single project's living memory. You'll see it grow as you and your agents add to it.</p>
@@ -311,16 +438,16 @@ export default function OnboardingView() {
               </div>
 
               <div className="flex items-center justify-between mt-8">
-                <span className="text-[11px] text-[var(--text-3)] cursor-pointer hover:text-[var(--text-2)]" onClick={() => setStep(4)}>Use a default name</span>
+                <span className="text-[11px] text-[var(--text-3)] cursor-pointer hover:text-[var(--text-2)]" onClick={() => setStep(5)}>Use a default name</span>
                 <div className="flex gap-2.5">
-                  <Button variant="ghost" onClick={() => setStep(2)}>Back</Button>
-                  <Button variant="primary" kbd="↵" onClick={() => setStep(4)}>Continue</Button>
+                  <Button variant="ghost" onClick={() => setStep(3)}>Back</Button>
+                  <Button variant="primary" kbd="↵" onClick={() => setStep(5)}>Continue</Button>
                 </div>
               </div>
             </>
           )}
 
-          {step === 4 && (
+          {step === 5 && (
             <>
               <h1 className="font-display text-[28px] font-semibold tracking-tight leading-tight mb-2">Tell Orion about you.</h1>
               <p className="text-sm text-[var(--text-2)] leading-relaxed mb-8 max-w-[520px]">Your name and current focus help agents personalize their responses from the start.</p>
@@ -347,16 +474,16 @@ export default function OnboardingView() {
               </div>
 
               <div className="flex items-center justify-between mt-8">
-                <span className="text-[11px] text-[var(--text-3)] cursor-pointer hover:text-[var(--text-2)]" onClick={() => setStep(5)}>Skip</span>
+                <span className="text-[11px] text-[var(--text-3)] cursor-pointer hover:text-[var(--text-2)]" onClick={() => setStep(6)}>Skip</span>
                 <div className="flex gap-2.5">
-                  <Button variant="ghost" onClick={() => setStep(3)}>Back</Button>
-                  <Button variant="primary" kbd="↵" onClick={() => setStep(5)}>Continue</Button>
+                  <Button variant="ghost" onClick={() => setStep(4)}>Back</Button>
+                  <Button variant="primary" kbd="↵" onClick={() => setStep(6)}>Continue</Button>
                 </div>
               </div>
             </>
           )}
 
-          {step === 5 && (
+          {step === 6 && (
             <>
               <h1 className="font-display text-[28px] font-semibold tracking-tight leading-tight mb-2">Got a steering document?</h1>
               <p className="text-sm text-[var(--text-2)] leading-relaxed mb-8 max-w-[520px]">If you have a CLAUDE.md, .cursorrules, or any markdown file that defines how agents should behave — point Orion to it. It'll be stored in the Sun and always available to every agent.</p>
@@ -383,16 +510,16 @@ export default function OnboardingView() {
               </div>
 
               <div className="flex items-center justify-between mt-8">
-                <span className="text-[11px] text-[var(--text-3)] cursor-pointer hover:text-[var(--text-2)]" onClick={() => setStep(6)}>Skip — use default template</span>
+                <span className="text-[11px] text-[var(--text-3)] cursor-pointer hover:text-[var(--text-2)]" onClick={() => setStep(7)}>Skip — use default template</span>
                 <div className="flex gap-2.5">
-                  <Button variant="ghost" onClick={() => setStep(4)}>Back</Button>
-                  <Button variant="primary" kbd="↵" onClick={() => setStep(6)}>Continue</Button>
+                  <Button variant="ghost" onClick={() => setStep(5)}>Back</Button>
+                  <Button variant="primary" kbd="↵" onClick={() => setStep(7)}>Continue</Button>
                 </div>
               </div>
             </>
           )}
 
-          {step === 6 && (
+          {step === 7 && (
             <>
               <h1 className="font-display text-[28px] font-semibold tracking-tight leading-tight mb-2">Your tools and preferences.</h1>
               <p className="text-sm text-[var(--text-2)] leading-relaxed mb-8 max-w-[520px]">These become entities in your Galaxy. Agents will know your stack from day one.</p>
@@ -435,7 +562,7 @@ export default function OnboardingView() {
               <div className="flex items-center justify-between mt-8">
                 <span className="text-[11px] text-[var(--text-3)] cursor-pointer hover:text-[var(--text-2)]" onClick={handleFinish}>Skip and finish</span>
                 <div className="flex gap-2.5">
-                  <Button variant="ghost" onClick={() => setStep(5)}>Back</Button>
+                  <Button variant="ghost" onClick={() => setStep(6)}>Back</Button>
                   <Button variant="primary" kbd="↵" onClick={handleFinish} disabled={loading}>
                     {loading ? 'Creating…' : 'Open my Galaxy'}
                   </Button>
