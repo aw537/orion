@@ -65,11 +65,18 @@ class ChromaClient:
                     query_embedding: list[float], n_results: int = 10, where: dict | None = None):
         col = await self._get_or_create_collection(galaxy_id, region)
         kwargs = {"query_embeddings": [query_embedding], "n_results": n_results, "include": ["documents", "metadatas", "distances"]}
+
+        # Build a valid ChromaDB where filter combining planet_id and caller filters
+        conditions = []
         if planet_id:
-            planet_filter = {"planet_id": planet_id}
-            kwargs["where"] = {**planet_filter, **(where or {})} if where else planet_filter
-        elif where:
-            kwargs["where"] = where
+            conditions.append({"planet_id": planet_id})
+        if where:
+            conditions.append(where)
+
+        if len(conditions) == 1:
+            kwargs["where"] = conditions[0]
+        elif len(conditions) > 1:
+            kwargs["where"] = {"$and": conditions}
 
         def _query():
             return col.query(**kwargs)
