@@ -28,14 +28,14 @@ First startup takes a few minutes — Ollama downloads the embedding model (`nom
 
 ### 2. Create your Galaxy
 
-Open `http://localhost:3000` and complete the onboarding wizard (2 required steps, 4 optional):
+Open `http://localhost:3000` and complete the onboarding wizard (6 steps, all skippable):
 
 1. **Role** — your role determines the default Planet structure
-2. **First Biome** — name your first project context
-3. *(optional)* Import existing knowledge (Obsidian vault, markdown folder, Git repo)
-4. *(optional)* About you — name, communication style, current goal
-5. *(optional)* Steering document — import a CLAUDE.md or custom agent rules file
-6. *(optional)* Tools & preferences — technologies you use
+2. **Import source** — local folder, Obsidian vault, Git repo, or start empty
+3. **Name your first Biome** — name your first project context
+4. **About you** — name, communication style, current goal
+5. **Steering document** — import a CLAUDE.md or custom agent rules file
+6. **Tools & preferences** — technologies you use, contradiction handling
 
 Or via CLI:
 
@@ -74,7 +74,7 @@ Orion is three independent services that communicate over HTTP:
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
 │  Frontend    │     │  MCP Server │     │  REST API   │
 │  :3000      │────▶│  :8787      │────▶│  :8000      │
-│  React UI   │     │  19 tools   │     │  90 endpoints│
+│  React UI   │     │  20 tools   │     │  97 endpoints│
 └─────────────┘     └─────────────┘     └──────┬──────┘
                                                │
                           ┌────────────────────┼────────────────────┐
@@ -96,8 +96,8 @@ Orion is three independent services that communicate over HTTP:
 | URL | Service | Description |
 |-----|---------|-------------|
 | `http://localhost:3000` | Frontend | Galaxy visualization, knowledge graph, agent panels |
-| `http://localhost:8000` | REST API | 90 endpoints, OpenAPI docs at `/docs` |
-| `http://localhost:8787` | MCP Server | 19 tools for AI agents |
+| `http://localhost:8000` | REST API | 97 endpoints, OpenAPI docs at `/docs` |
+| `http://localhost:8787` | MCP Server | 20 tools for AI agents |
 
 ### Project Structure
 
@@ -144,6 +144,7 @@ orion/
 | `brain.know` | Quick concept lookup with graph neighborhood. |
 | `brain.graph_query` | Traverse the knowledge graph from an entity. |
 | `brain.find_path` | Shortest path between two concepts. |
+| `brain.graph_full` | Full knowledge graph — all entities and edges. |
 
 **Sun tools** — Galaxy steering document:
 
@@ -152,6 +153,12 @@ orion/
 | `sun.read` | Read the Sun (identity, values, agent protocol, working context, steering doc). |
 | `sun.update` | Update a Sun section. Changes logged to evolution log. |
 | `sun.working_context` | Quick-update current focus, blockers, decisions. |
+
+**Session lifecycle:**
+
+| Tool | What it does |
+|------|-------------|
+| `orion_session_end` | End the current session and return usage stats. |
 
 ---
 
@@ -364,7 +371,7 @@ npm install && npm run dev
 - **Accessibility** — all close buttons need `aria-label`. Slide-in panels use `useFocusTrap`. Animations respect `prefers-reduced-motion`. Target WCAG AA 4.5:1 contrast for text on `--bg`.
 
 ```bash
-# Run backend tests (540 tests, ~7s)
+# Run backend tests (576 tests, ~7s)
 cd backend && pytest
 
 # Run a specific test file
@@ -379,7 +386,7 @@ cd backend && alembic upgrade head
 
 ### Tech Stack
 
-**Backend:** Python 3.12, FastAPI, SQLAlchemy (async), PostgreSQL / SQLite, ChromaDB, Redis 7, APScheduler, Alembic (1 migration)
+**Backend:** Python 3.12, FastAPI, SQLAlchemy (async), PostgreSQL / SQLite, ChromaDB, Redis 7, APScheduler, Alembic (2 migrations)
 **MCP Server:** Python 3.12, FastMCP, httpx (HTTP client to backend)
 **Frontend:** React 18, Vite, TypeScript, Tailwind CSS, Zustand, TanStack Query, D3.js
 **Infrastructure:** Docker Compose — 7 services (API, MCP, frontend, PostgreSQL, Redis, ChromaDB, Ollama)
