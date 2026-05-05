@@ -83,6 +83,9 @@ class OrientationService:
             transition.used = 1
             await db.commit()
 
+        # Lessons — self-correcting loop
+        lessons = await sun_service.get_lessons(galaxy_id, db=db)
+
         # Start session
         session = await agent_identity_service.start_session(agent_identity, galaxy_id, db)
 
@@ -103,6 +106,7 @@ class OrientationService:
             "current_context": context_layer,
             "knowledge_state": knowledge_layer,
             "operating_protocol": protocol_layer,
+            "lessons": lessons,
             "model_calibration": {
                 "model": agent_identity.current_model,
                 "token_budget": budget,

@@ -25,6 +25,14 @@ class AddDecisionBody(BaseModel):
     biome: str = ""
 
 
+class AppendLessonBody(BaseModel):
+    correction: str
+    context: str = ""
+    tags: list[str] = []
+    agent_name: str = "user"
+    severity: str = "medium"
+
+
 @router.post("/steering-doc/reimport")
 async def reimport_steering_doc(galaxy: Galaxy = Depends(get_galaxy_for_user), db: AsyncSession = Depends(get_db)):
     try:
@@ -41,6 +49,20 @@ async def get_full_sun(galaxy: Galaxy = Depends(get_galaxy_for_user), db: AsyncS
 @router.get("/evolution-log")
 async def get_evolution_log(limit: int = Query(default=50, le=200), galaxy: Galaxy = Depends(get_galaxy_for_user), db: AsyncSession = Depends(get_db)):
     return await sun_service.get_evolution_log(galaxy.id, limit, db)
+
+
+@router.post("/lessons")
+async def append_lesson(body: AppendLessonBody, galaxy: Galaxy = Depends(get_galaxy_for_user), db: AsyncSession = Depends(get_db)):
+    try:
+        return await sun_service.append_lesson(galaxy.id, body.correction, body.context, body.tags, body.agent_name, body.severity, db)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@router.get("/lessons")
+async def get_lessons(tags: str = Query(default="", description="Comma-separated tags to filter by"), limit: int = Query(default=50, le=200), galaxy: Galaxy = Depends(get_galaxy_for_user), db: AsyncSession = Depends(get_db)):
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
+    return await sun_service.get_lessons(galaxy.id, tag_list, limit, db)
 
 
 @router.get("/{section_key}")

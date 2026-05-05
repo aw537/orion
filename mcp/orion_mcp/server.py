@@ -201,6 +201,15 @@ async def sun_working_context(current_focus: str | None = None, add_blocker: str
     return await _wrap(_DEFAULT_AGENT, "sun.working_context", r)
 
 
+@mcp.tool(name="sun.lesson")
+async def sun_lesson(correction: str, context: str = "", tags: list[str] | None = None,
+                     severity: str = "medium", agent_name: str | None = None) -> dict:
+    """Record a lesson learned — a correction or rule the agent should remember permanently."""
+    resolved = _resolve_agent(agent_name)
+    r = await client.sun_lesson(correction, context, tags, resolved, severity)
+    return await _wrap(resolved, "sun.lesson", r)
+
+
 # ── Session management ───────────────────────────────────────────────
 
 @mcp.tool(name="orion_session_end")

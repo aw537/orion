@@ -10,7 +10,7 @@ from app.services import nebula_service
 
 logger = logging.getLogger(__name__)
 
-SUN_SECTIONS = ["identity", "values", "agent_protocol", "planet_registry", "working_context", "evolution_log", "steering_doc"]
+SUN_SECTIONS = ["identity", "values", "agent_protocol", "planet_registry", "working_context", "evolution_log", "steering_doc", "lessons"]
 
 DEFAULT_STEERING_DOC = """# Steering Document
 
@@ -29,6 +29,7 @@ DEFAULT_SUN = {
     "working_context": {"current_focus": "", "hot_biomes": [], "recent_decisions": [], "blockers": [], "updated_at": ""},
     "evolution_log": {"entries": []},
     "steering_doc": {"markdown": DEFAULT_STEERING_DOC, "source_path": None},
+    "lessons": {"entries": []},
 }
 
 
@@ -211,6 +212,64 @@ async def get_evolution_log(galaxy_id: str, limit: int = 50, db: AsyncSession | 
         log = _parse_content(row.content)
         entries = log.get("entries", [])
         return entries[-limit:]
+
+    if db:
+        return await _fetch(db)
+    async with async_session() as session:
+        return await _fetch(session)
+
+
+async def append_lesson(galaxy_id: str, correction: str, context: str, tags: list[str], agent_name: str, severity: str = "medium", db: AsyncSession | None = None) -> dict:
+    """Append a lesson to the Sun's lessons section. Append-only."""
+    async def _do(session, should_commit: bool):
+        row = (await session.execute(
+            select(SunSection).where(SunSection.galaxy_id == galaxy_id, SunSection.section_key == "lessons")
+        )).scalar_one_or_none()
+        if not row:
+            raise ValueError("lessons section not found — run onboarding first")
+        content = _parse_content(row.content)
+        entries = content.get("entries", [])
+        entry = {
+            "id": f"L{len(entries) + 1:03d}",
+            "correction": correction,
+            "context": context,
+            "tags": tags,
+            "severity": severity,
+            "agent": agent_name,
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+            "status": "active",
+        }
+        entries.append(entry)
+        row.content = {"entries": entries}
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(row, "content")
+        row.version += 1
+        row.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        if should_commit:
+            await session.commit()
+        else:
+            await session.flush()
+        return entry
+
+    if db:
+        return await _do(db, should_commit=True)
+    async with async_session() as session:
+        return await _do(session, should_commit=True)
+
+
+async def get_lessons(galaxy_id: str, tags: list[str] | None = None, limit: int = 50, db: AsyncSession | None = None) -> list[dict]:
+    """Get lessons, optionally filtered by tags."""
+    async def _fetch(session):
+        row = (await session.execute(
+            select(SunSection).where(SunSection.galaxy_id == galaxy_id, SunSection.section_key == "lessons")
+        )).scalar_one_or_none()
+        if not row:
+            return []
+        content = _parse_content(row.content)
+        entries = content.get("entries", [])
+        if tags:
+            entries = [e for e in entries if any(t in e.get("tags", []) for t in tags)]
+        return [e for e in entries if e.get("status") == "active"][-limit:]
 
     if db:
         return await _fetch(db)

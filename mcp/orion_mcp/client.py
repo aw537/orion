@@ -198,6 +198,20 @@ async def sun_working_context(current_focus=None, add_blocker=None, add_decision
     return results or {"status": "no changes"}
 
 
+async def sun_lesson(correction: str, context: str = "", tags: list[str] | None = None, agent_name: str = "mcp_client", severity: str = "medium"):
+    return await _post("/api/v1/sun/lessons", {
+        "correction": correction, "context": context,
+        "tags": tags or [], "agent_name": agent_name, "severity": severity,
+    })
+
+
+async def sun_get_lessons(tags: list[str] | None = None, limit: int = 50):
+    params = f"?limit={limit}"
+    if tags:
+        params += f"&tags={','.join(tags)}"
+    return await _get(f"/api/v1/sun/lessons{params}")
+
+
 # ── Nebula (session logging) ────────────────────────────────────────
 
 async def graph_full():
