@@ -194,26 +194,35 @@ class PlanetAssignmentEngine:
 
     @staticmethod
     def _strategy_keyword(content: str, planets: list[Planet]) -> PlanetAssignment | None:
-        words = set(content.lower().split())
-        best_planet, best_score = None, 0.0
+        content_lower = content.lower()
+        words = set(content_lower.split())
+        best_planet, best_score, best_reason = None, 0.0, ""
         for p in planets:
-            if not p.description:
-                continue
-            pw = set(p.description.lower().split())
-            overlap = len(words & pw)
-            if overlap == 0:
-                continue
-            score = overlap / len(pw)
+            score = 0.0
+            reason = ""
+            # Name match: planet name (or any word in it) appears in content
+            name_words = set(p.name.lower().split())
+            name_hits = name_words & words
+            if name_hits:
+                # Full name present scores higher than partial
+                name_score = 0.65 if p.name.lower() in content_lower else 0.57
+                if name_score > score:
+                    score, reason = name_score, f"Planet name '{p.name}' found in content"
+            # Description word overlap (when available)
+            if p.description:
+                pw = set(p.description.lower().split())
+                overlap = len(words & pw)
+                if overlap > 0:
+                    desc_score = min(0.65, overlap / max(len(pw), 1))
+                    if desc_score > score:
+                        score, reason = desc_score, f"Keyword overlap with Planet '{p.name}' description"
             if score > best_score:
-                best_score, best_planet = score, p
-        if not best_planet:
-            return None
-        conf = round(min(0.65, best_score), 3)
-        if conf < KEYWORD_MIN_CONFIDENCE:
+                best_score, best_planet, best_reason = score, p, reason
+        if not best_planet or best_score < KEYWORD_MIN_CONFIDENCE:
             return None
         return PlanetAssignment(
-            planet=best_planet, biome=None, confidence=conf, method="keyword_match",
-            reasoning=f"Keyword overlap with Planet '{best_planet.name}' description",
+            planet=best_planet, biome=None, confidence=round(best_score, 3), method="keyword_match",
+            reasoning=best_reason,
         )
 
     # ── Biome helpers ──
