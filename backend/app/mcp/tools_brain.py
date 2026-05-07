@@ -428,11 +428,25 @@ async def brain_diff(
                 superseded_ids.update(s.supersedes)
             added.append(record)
 
+        superseded = []
+        if superseded_ids:
+            s_rows = (await db.execute(select(Stardust).where(Stardust.id.in_(list(superseded_ids))))).scalars().all()
+            for sr in s_rows:
+                sp_name = (await db.execute(select(PlanetModel.name).where(PlanetModel.id == sr.planet_id))).scalar() or ""
+                sb_name = (await db.execute(select(Biome.name).where(Biome.id == sr.biome_id))).scalar() or ""
+                superseded.append({
+                    "id": sr.id, "content": sr.content, "planet": sp_name,
+                    "biome": sb_name, "region": sr.region, "confidence": sr.confidence,
+                    "valid_from": sr.valid_from.isoformat() if sr.valid_from else None,
+                    "source_agent": sr.source_agent,
+                })
+
         return {
             "topic": topic,
             "since": since,
             "planet": planet,
             "changes_added": added,
+            "changes_superseded": superseded,
             "changes_superseded_ids": list(superseded_ids),
             "summary": f"{len(added)} record(s) added, {len(superseded_ids)} superseded since {since}",
         }
