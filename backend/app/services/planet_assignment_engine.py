@@ -1,7 +1,8 @@
 """Determines which Planet and Biome a piece of knowledge belongs in.
 
-Runs four strategies in priority order, returns the first match above threshold.
-Strategy order: graphify_cluster → entity_routing → keyword_match → caller_suggestion → inbox_fallback
+Write routing: caller context is the default when provided. Engine runs in advisory mode
+and only overrides at CALLER_OVERRIDE_THRESHOLD (0.90) confidence to a *different* planet.
+Without caller context: graphify_cluster → entity_routing → keyword_match → inbox_fallback.
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ logger = logging.getLogger(__name__)
 GRAPHIFY_MIN_CONFIDENCE = 0.75
 ENTITY_MIN_CONFIDENCE = 0.70
 KEYWORD_MIN_CONFIDENCE = 0.55
+CALLER_OVERRIDE_THRESHOLD = 0.90  # engine must exceed this to route away from caller's planet
 
 _extractor = EntityExtractor()
 
@@ -79,47 +81,61 @@ class PlanetAssignmentEngine:
             return PlanetAssignment(planet=await self._planet_for_biome(inbox, db), biome=inbox, confidence=0.0,
                                     method="inbox_fallback", reasoning="No Planets exist in this Galaxy yet")
 
-        # Strategy 1: Graphify
+        # When the caller declares a planet, treat it as the default.
+        # The engine runs in advisory mode and only overrides at very high confidence
+        # to a *different* planet — the content is unambiguously wrong for the caller's context.
+        if caller_planet:
+            caller = next((p for p in planets if p.name == caller_planet), None)
+            if caller:
+                engine = await self._run_engine(content, filename, galaxy_id, planets, db)
+                if engine and engine.confidence >= CALLER_OVERRIDE_THRESHOLD and engine.planet.name != caller_planet:
+                    engine.override_caller = True
+                    return engine
+                biome = await self._resolve_biome(caller_biome, caller, db) if caller_biome else None
+                return PlanetAssignment(
+                    planet=caller, biome=biome, confidence=0.85,
+                    method="caller_context",
+                    reasoning=f"Agent operating in Planet '{caller_planet}'" + (f" / Biome '{caller_biome}'" if caller_biome else ""),
+                )
+
+        # No caller context — engine owns the routing.
+        engine = await self._run_engine(content, filename, galaxy_id, planets, db)
+        if engine:
+            return engine
+
+        inbox = await self._get_or_create_inbox(galaxy_id, db)
+        return PlanetAssignment(
+            planet=await self._planet_for_biome(inbox, db), biome=inbox, confidence=0.0,
+            method="inbox_fallback", reasoning="Content could not be confidently assigned to any Planet. Review in Inbox.",
+        )
+
+    async def _run_engine(
+        self, content: str, filename: str | None, galaxy_id: str,
+        planets: list[Planet], db: AsyncSession,
+    ) -> PlanetAssignment | None:
+        """Run routing strategies in order; return first match above threshold, or None."""
         if should_run_graphify(content, filename):
             try:
                 analysis = await graphify_adapter.analyze(content, filename=filename)
                 if analysis.graphify_ran:
                     a = await self._strategy_graphify(analysis, planets, db)
                     if a and a.confidence >= GRAPHIFY_MIN_CONFIDENCE:
-                        a.override_caller = caller_planet is not None and a.planet.name != caller_planet
                         return a
             except Exception as e:
                 logger.warning(f"Graphify strategy failed: {e}")
 
-        # Strategy 2: Entity routing
         try:
             a = await self._strategy_entity(content, galaxy_id, planets, db)
             if a and a.confidence >= ENTITY_MIN_CONFIDENCE:
-                a.override_caller = caller_planet is not None and a.planet.name != caller_planet
                 return a
         except Exception as e:
             logger.warning(f"Entity strategy failed: {e}")
 
-        # Strategy 3: Keyword match
         a = self._strategy_keyword(content, planets)
         if a and a.confidence >= KEYWORD_MIN_CONFIDENCE:
-            a.override_caller = caller_planet is not None and a.planet.name != caller_planet
             return a
 
-        # Strategy 4: Caller suggestion
-        if caller_planet:
-            planet = next((p for p in planets if p.name == caller_planet), None)
-            if planet:
-                biome = await self._resolve_biome(caller_biome, planet, db) if caller_biome else None
-                return PlanetAssignment(planet=planet, biome=biome, confidence=0.5,
-                                        method="caller_suggestion", reasoning=f"Using caller-specified Planet: {caller_planet}")
-
-        # Strategy 5: Inbox
-        inbox = await self._get_or_create_inbox(galaxy_id, db)
-        return PlanetAssignment(
-            planet=await self._planet_for_biome(inbox, db), biome=inbox, confidence=0.0,
-            method="inbox_fallback", reasoning="Content could not be confidently assigned to any Planet. Review in Inbox.",
-        )
+        return None
 
     # ── Strategies ──
 
@@ -194,26 +210,35 @@ class PlanetAssignmentEngine:
 
     @staticmethod
     def _strategy_keyword(content: str, planets: list[Planet]) -> PlanetAssignment | None:
-        words = set(content.lower().split())
-        best_planet, best_score = None, 0.0
+        content_lower = content.lower()
+        words = set(content_lower.split())
+        best_planet, best_score, best_reason = None, 0.0, ""
         for p in planets:
-            if not p.description:
-                continue
-            pw = set(p.description.lower().split())
-            overlap = len(words & pw)
-            if overlap == 0:
-                continue
-            score = overlap / len(pw)
+            score = 0.0
+            reason = ""
+            # Name match: planet name (or any word in it) appears in content
+            name_words = set(p.name.lower().split())
+            name_hits = name_words & words
+            if name_hits:
+                # Full name present scores higher than partial
+                name_score = 0.65 if p.name.lower() in content_lower else 0.57
+                if name_score > score:
+                    score, reason = name_score, f"Planet name '{p.name}' found in content"
+            # Description word overlap (when available)
+            if p.description:
+                pw = set(p.description.lower().split())
+                overlap = len(words & pw)
+                if overlap > 0:
+                    desc_score = min(0.65, overlap / max(len(pw), 1))
+                    if desc_score > score:
+                        score, reason = desc_score, f"Keyword overlap with Planet '{p.name}' description"
             if score > best_score:
-                best_score, best_planet = score, p
-        if not best_planet:
-            return None
-        conf = round(min(0.65, best_score), 3)
-        if conf < KEYWORD_MIN_CONFIDENCE:
+                best_score, best_planet, best_reason = score, p, reason
+        if not best_planet or best_score < KEYWORD_MIN_CONFIDENCE:
             return None
         return PlanetAssignment(
-            planet=best_planet, biome=None, confidence=conf, method="keyword_match",
-            reasoning=f"Keyword overlap with Planet '{best_planet.name}' description",
+            planet=best_planet, biome=None, confidence=round(best_score, 3), method="keyword_match",
+            reasoning=best_reason,
         )
 
     # ── Biome helpers ──

@@ -4,6 +4,7 @@ from sqlalchemy import select, insert, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Planet, Biome, Stardust, Entity, EntityStardust
+from app.models.brain import StardustRelationship
 from app.models.user import User
 from app.auth.dependencies import get_current_user
 from app.auth.permissions import permission_checker
@@ -76,6 +77,14 @@ async def get_biome_graph(biome_id: str, db: AsyncSession = Depends(get_db)):
                 nodes.append(GraphNode(id=e.id, label=e.name, type="entity", size=float(e.tier), metadata={"entity_type": e.entity_type}))
             for l in links:
                 edges.append(GraphEdge(source=l.entity_id, target=l.stardust_id, type="entity_link"))
+
+        # Get stardust relationships (co_chunk, wikilink) between visible nodes only
+        sd_rels = (await db.execute(
+            select(StardustRelationship).where(StardustRelationship.source_stardust_id.in_(stardust_ids))
+        )).scalars().all()
+        for r in sd_rels:
+            if r.target_stardust_id in stardust_ids:
+                edges.append(GraphEdge(source=r.source_stardust_id, target=r.target_stardust_id, type=r.relationship_type))
 
     return BiomeGraphResponse(nodes=nodes, edges=edges)
 

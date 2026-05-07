@@ -19,6 +19,8 @@ class PlanetSummary(BaseModel):
     stardust_count: int
     health_status: str
     active_biomes: list[str] = []
+    color: str = "#6D28D9"
+    planet_type: str = "standard"
 
 
 class GalaxyStrengthResponse(BaseModel):

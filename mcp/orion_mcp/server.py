@@ -30,21 +30,31 @@ def _resolve_agent(agent_name: str | None) -> str:
     return _DEFAULT_AGENT
 
 
-async def _wrap(agent: str, tool: str, result: dict) -> dict:
-    """Session tracking wrapper. On brain.orient first call, prepend full context bundle."""
+async def _wrap(agent: str, tool: str, result: dict, verbose: bool = False) -> dict:
+    """Session tracking wrapper. On brain.orient first call, prepend session header.
+
+    Compact mode (default): injects only _session; tool_result already contains all orientation data.
+    Verbose mode: also injects raw _sun and _context blobs.
+    """
     session = tracker.touch(agent, tool)
     if tracker.needs_context(agent):
         tracker.mark_context_injected(agent)
         if tool == "brain.orient":
             try:
-                ctx = await client.memory_context()
-                sun = await client.sun_read()
-                result = {
-                    "_session": {"session_id": session.id, "message": "Session started. Sun and context auto-loaded."},
-                    "_sun": sun, "_context": ctx, "tool_result": result,
-                }
+                if verbose:
+                    ctx = await client.memory_context()
+                    sun = await client.sun_read()
+                    result = {
+                        "_session": {"session_id": session.id, "message": "Session started. Sun and context auto-loaded."},
+                        "_sun": sun, "_context": ctx, "tool_result": result,
+                    }
+                else:
+                    result = {
+                        "_session": {"session_id": session.id, "message": "Session started."},
+                        "tool_result": result,
+                    }
             except Exception as e:
-                logger.warning(f"Failed to auto-inject context: {e}")
+                logger.warning(f"Failed to wrap orient context: {e}")
     return result
 
 
@@ -90,11 +100,19 @@ async def memory_entity_get(entity_name: str, planet: str | None = None) -> dict
 @mcp.tool(name="brain.orient")
 async def brain_orient(agent_name: str, model: str, agent_type: str = "GENERAL",
                         active_planet: str | None = None, active_biome: str | None = None,
-                        max_tokens: int | None = None,
-                        include_biome_stardust: bool = False) -> dict:
-    """Orient yourself in your Galaxy at the start of every session. Set include_biome_stardust=true to embed biome-scoped stardust in one call (eliminates a follow-up memory.context call)."""
+                        max_tokens: int | None = None, include_biome_stardust: bool = False,
+                        verbose: bool = False) -> dict:
+    """Orient yourself in your Galaxy at the start of every session. REQUIRED: Call this once at session start.
+
+    Returns your persistent identity, current context, synthesized knowledge state, and operating protocol.
+    The response includes session_id — pass it to subsequent calls to maintain session continuity.
+
+    Parameters:
+    - verbose: set True to also receive raw _sun and _context dumps (larger response, rarely needed)
+    - include_biome_stardust: set True to embed biome stardust in one call (eliminates a memory.context follow-up)
+    """
     r = await client.brain_orient(agent_name, model, agent_type, active_planet, active_biome, max_tokens, include_biome_stardust)
-    return await _wrap(agent_name, "brain.orient", r)
+    return await _wrap(agent_name, "brain.orient", r, verbose=verbose)
 
 @mcp.tool(name="brain.think")
 async def brain_think(content: str, planet: str | None = None, biome: str | None = None,
@@ -113,10 +131,31 @@ async def brain_recall(query: str, cognitive_mode: str | None = None,
                         context_window: str | None = None, include_reasoning: bool = False,
                         include_graph_paths: bool = False, recency_weight: float = 0.3,
                         limit: int = 5, session_id: str | None = None,
-                        agent_name: str | None = None) -> dict:
-    """Access knowledge from your brain with graph-enhanced retrieval."""
-    r = await client.brain_recall(query, cognitive_mode, planet, biome, context_window,
-                                   include_reasoning, include_graph_paths, recency_weight, limit, session_id)
+                        agent_name: str | None = None, mode: str = "semantic") -> dict:
+    """Access knowledge from your brain. Use the mode parameter to express retrieval intent:
+
+    - mode="semantic" (default): raw records ranked by semantic similarity + recency + confidence.
+      Best for: finding relevant knowledge chunks, filtering by cognitive_mode or biome.
+    - mode="ask": natural language Q&A — returns a cited answer backed by specific records.
+      Best for: "What decisions were made about auth?", "Who knows about Stripe?"
+    - mode="synthesize": prose narrative over a topic — one LLM pass, no citations.
+      Best for: summarising a broad topic, drafting a brief.
+    - mode="concept": synthesized profile of a named entity or concept.
+      Best for: "Tell me everything about FastAPI", "What is the MVP entity?"
+
+    Parameters:
+    - cognitive_mode: filter by region — 'contextual', 'strategic', 'analytical', 'creative'
+    - context_window: prepend to query for better semantic matching
+    """
+    if mode == "ask":
+        r = await client.brain_ask(query, planet, depth=2)
+    elif mode == "synthesize":
+        r = await client.brain_synthesize(query, planet, biome)
+    elif mode == "concept":
+        r = await client.brain_know(query, depth="detailed")
+    else:
+        r = await client.brain_recall(query, cognitive_mode, planet, biome, context_window,
+                                       include_reasoning, include_graph_paths, recency_weight, limit, session_id)
     return await _wrap(_resolve_agent(agent_name), "brain.recall", r)
 
 @mcp.tool(name="brain.calibrate")

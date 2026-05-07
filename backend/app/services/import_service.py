@@ -231,6 +231,26 @@ async def _get_or_create_biome(planet_id: str, galaxy_id: str, biome_name: str) 
         return biome_id
 
 
+async def _bulk_insert_stardust_relationships(
+    galaxy_id: str,
+    pairs: list[tuple[str, str]],
+    relationship_type: str,
+) -> None:
+    from app.models.brain import StardustRelationship
+    async with async_session() as db:
+        async with db.begin():
+            for src_id, tgt_id in pairs:
+                db.add(StardustRelationship(
+                    id=str(uuid.uuid4()),
+                    galaxy_id=galaxy_id,
+                    source_stardust_id=src_id,
+                    target_stardust_id=tgt_id,
+                    relationship_type=relationship_type,
+                    confidence=0.9,
+                    created_by="importer",
+                ))
+
+
 async def import_markdown_folder(path: str, planet_id: str, galaxy_id: str, max_files: int = 500, max_depth: int = 5):
     """Import a folder of markdown files into the Galaxy, with format-aware behavior."""
     logger.info(f"Starting markdown import from {path}")
@@ -280,7 +300,8 @@ async def import_markdown_folder(path: str, planet_id: str, galaxy_id: str, max_
         return
 
     imported = 0
-    wikilink_map: dict[str, list[str]] = {}  # filename_stem -> [target_stems]
+    wikilink_map: dict[str, list[str]] = {}  # stem -> [target_stems] for files containing [[links]]
+    stem_to_stardust_ids: dict[str, list[str]] = {}  # stem -> [stardust_id, ...] written from that file
 
     for md_file in files:
         try:
@@ -290,6 +311,13 @@ async def import_markdown_folder(path: str, planet_id: str, galaxy_id: str, max_
             frontmatter, body = parse_frontmatter(content)
             if not body.strip():
                 continue
+
+            stem = Path(md_file).stem
+
+            # Collect wikilinks for all formats — [[link]] syntax is universal
+            links = extract_wikilinks(content)
+            if links:
+                wikilink_map[stem] = links
 
             # ── Per-format metadata resolution ──
             if fmt == "obsidian":
@@ -302,11 +330,6 @@ async def import_markdown_folder(path: str, planet_id: str, galaxy_id: str, max_
                 gravity = "BIOME"
                 confidence = 0.5
                 tags = frontmatter.get("tags", [])
-                # Collect wikilinks for relationship creation
-                links = extract_wikilinks(content)
-                if links:
-                    stem = Path(md_file).stem
-                    wikilink_map[stem] = links
 
             elif fmt == "gbrain":
                 gbrain_meta = parse_gbrain_frontmatter(frontmatter, body)
@@ -329,26 +352,59 @@ async def import_markdown_folder(path: str, planet_id: str, galaxy_id: str, max_
             if isinstance(tags, str):
                 tags = [tags]
             chunks = chunk_by_paragraph(body)
+            chunk_ids: list[str] = []
             for chunk in chunks:
                 if len(chunk.strip()) < 10:
                     continue
                 try:
-                    await stardust_service.write_stardust(
+                    receipt = await stardust_service.write_stardust(
                         content=chunk, galaxy_id=galaxy_id,
                         planet_name=cur_planet_name, biome_name=biome_name,
                         region=region, gravity=gravity, confidence=confidence,
                         source_agent="importer", context_tags=tags,
                         filename=str(md_file),
                     )
+                    chunk_ids.append(receipt.stardust_id)
                     imported += 1
                 except Exception as e:
                     logger.warning(f"Failed to import chunk from {md_file}: {e}")
+
+            if chunk_ids:
+                stem_to_stardust_ids[stem] = chunk_ids
 
             await nebula_service.log_event(galaxy_id=galaxy_id, action_type="IMPORT", initiated_by="importer", record_id=os.path.basename(md_file))
         except Exception as e:
             logger.error(f"Failed to import {md_file}: {e}")
 
-    # ── Obsidian: create entity relationships from wikilinks ──
+    # ── Create stardust graph edges ──
+
+    # Rule 1: co-chunk — all chunks from the same source file are connected
+    co_chunk_pairs: list[tuple[str, str]] = []
+    for ids in stem_to_stardust_ids.values():
+        for i in range(len(ids)):
+            for j in range(i + 1, len(ids)):
+                co_chunk_pairs.append((ids[i], ids[j]))
+    if co_chunk_pairs:
+        logger.info(f"Creating {len(co_chunk_pairs)} co-chunk stardust edges")
+        await _bulk_insert_stardust_relationships(galaxy_id, co_chunk_pairs, "co_chunk")
+
+    # Rule 2: wikilink — chunks from the referenced file point to chunks in the referencing file
+    # e.g. [[wiki]] in file_A.md → edge from each Wiki.md chunk to each file_A.md chunk
+    wikilink_pairs: list[tuple[str, str]] = []
+    for referencing_stem, target_stems in wikilink_map.items():
+        referencing_ids = stem_to_stardust_ids.get(referencing_stem, [])
+        if not referencing_ids:
+            continue
+        for target_stem in target_stems:
+            referenced_ids = stem_to_stardust_ids.get(target_stem, [])
+            for ref_id in referenced_ids:
+                for src_id in referencing_ids:
+                    wikilink_pairs.append((ref_id, src_id))
+    if wikilink_pairs:
+        logger.info(f"Creating {len(wikilink_pairs)} wikilink stardust edges")
+        await _bulk_insert_stardust_relationships(galaxy_id, wikilink_pairs, "wikilink")
+
+    # ── Create entity concepts from wikilinks ──
     if wikilink_map:
         logger.info(f"Creating entity relationships from {len(wikilink_map)} files with wikilinks")
         from app.models import Entity

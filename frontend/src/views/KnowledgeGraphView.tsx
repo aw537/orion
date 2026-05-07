@@ -5,12 +5,12 @@ import { useFullGraph, useEntityNeighborhood, useUnlinkedMentions, linkAll, type
 
 /* ── Edge colors by relationship type ─────────────────────────────── */
 const EDGE_COLORS: Record<string, string> = {
-  USES: '#0EA5E9', REPLACES: '#F59E0B', EVALUATES: '#8B5CF6',
-  DEPENDS_ON: '#EF4444', WORKS_WITH: '#10B981', PART_OF: '#6366F1',
-  INFORMS: '#EC4899', INDIRECTLY_USES: '#94A3B8', DERIVED_FROM: '#A78BFA',
-  SUPERSEDES: '#FB923C',
+  USES: '#ffffff', REPLACES: '#ffffff', EVALUATES: '#ffffff',
+  DEPENDS_ON: '#ffffff', WORKS_WITH: '#ffffff', PART_OF: '#ffffff',
+  INFORMS: '#ffffff', INDIRECTLY_USES: '#ffffff', DERIVED_FROM: '#ffffff',
+  SUPERSEDES: '#ffffff',
 };
-const DEFAULT_EDGE = '#4B5563';
+const DEFAULT_EDGE = '#ffffff';
 
 /* ── D3 node type (extends GraphEntity with simulation coords) ──── */
 interface SimNode extends d3.SimulationNodeDatum, GraphEntity {}
