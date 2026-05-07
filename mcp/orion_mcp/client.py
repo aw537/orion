@@ -136,6 +136,9 @@ async def brain_find_path(source_concept, target_concept):
         "source_concept": source_concept, "target_concept": target_concept,
     })
 
+async def brain_diff(topic: str, since: str, planet: str | None = None):
+    return await _post("/api/v1/brain/diff", {"topic": topic, "since": since, "planet": planet})
+
 async def brain_ask(question, planet=None, depth=2):
     return await _post("/api/v1/ask", {"question": question, "planet": planet, "depth": depth})
 

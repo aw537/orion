@@ -234,11 +234,25 @@ async def brain_graph_query(
 
 @mcp.tool(name="brain.find_path")
 async def brain_find_path(source_concept: str, target_concept: str, agent_name: str | None = None) -> dict:
-    """Find the connection between two concepts in your knowledge graph. Returns the shortest path with all relationship types."""
+    """Find the connection between two concepts in your knowledge graph. Returns the shortest path with all relationship types. When no path exists, returns reason: 'no_path' (concepts unrelated) or 'no_edges' (graph is empty)."""
     result = await tools_brain.brain_find_path(source_concept, target_concept)
     if not result:
-        result = {"path": None, "message": f"No path found between '{source_concept}' and '{target_concept}'"}
+        result = {"path": None, "reason": "no_path", "message": f"No path found between '{source_concept}' and '{target_concept}'"}
     return await _session_wrap(await _resolve_agent(agent_name), "brain.find_path", result)
+
+
+@mcp.tool(name="brain.diff")
+async def brain_diff(topic: str, since: str, planet: str | None = None,
+                     agent_name: str | None = None) -> dict:
+    """Show what changed about a topic since a given date.
+
+    Parameters:
+    - topic: keyword or phrase to match against stardust content
+    - since: ISO 8601 datetime (e.g. '2026-05-01' or '2026-05-01T00:00:00')
+    - planet: optional planet name to scope the diff
+    """
+    result = await tools_brain.brain_diff(topic, since, planet)
+    return await _session_wrap(await _resolve_agent(agent_name), "brain.diff", result)
 
 
 @mcp.tool(name="brain.ask")
@@ -246,7 +260,15 @@ async def brain_ask(
     question: str, planet: str | None = None, depth: int = 2,
     agent_name: str | None = None,
 ) -> dict:
-    """Ask a natural language question about your Galaxy's knowledge. Routes to the appropriate graph or synthesis operation based on question intent. Examples: 'Who knows about Stripe?', 'What decisions were made about auth?', 'How does FastAPI connect to deployment?'"""
+    """Ask a natural language question and get a synthesized answer from your Galaxy's knowledge.
+
+    Use this when: you have a question and want an interpreted, synthesized answer.
+    Use brain.recall instead when: you want raw records and full control over retrieval.
+    Use brain.know instead when: you have a specific named concept, not a question.
+
+    Routes automatically to graph traversal or semantic search based on question intent.
+    Examples: 'Who knows about Stripe?', 'What decisions were made about auth?', 'How does FastAPI connect to deployment?'
+    """
     galaxy_id = await _get_galaxy_id()
     if not galaxy_id:
         return {"error": "No galaxy found"}

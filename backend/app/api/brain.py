@@ -71,6 +71,12 @@ class FindPathRequest(BaseModel):
     target_concept: str
 
 
+class DiffRequest(BaseModel):
+    topic: str
+    since: str
+    planet: str | None = None
+
+
 class ContextRequest(BaseModel):
     planet: str | None = None
     biome: str | None = None
@@ -153,6 +159,11 @@ async def graph_query(body: GraphQueryRequest, user: User = Depends(get_current_
 async def find_path(body: FindPathRequest, user: User = Depends(get_current_user), galaxy: Galaxy = Depends(get_galaxy_for_user)):
     result = await tools_brain.brain_find_path(body.source_concept, body.target_concept, galaxy_id=galaxy.id)
     return result or {"path": None, "message": "No path found"}
+
+
+@router.post("/diff")
+async def diff(body: DiffRequest, user: User = Depends(get_current_user), galaxy: Galaxy = Depends(get_galaxy_for_user)):
+    return await tools_brain.brain_diff(body.topic, body.since, body.planet, galaxy_id=galaxy.id)
 
 
 @router.post("/context")

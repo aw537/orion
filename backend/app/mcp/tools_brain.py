@@ -355,5 +355,84 @@ async def brain_find_path(source_concept: str, target_concept: str, galaxy_id: s
 
         path = await graph_service.find_path(source.id, target.id, galaxy_id, db)
         if not path:
-            return None
+            from app.models import EntityStardust
+            edge_count = (await db.execute(
+                select(EntityStardust).limit(1)
+            )).first()
+            reason = "no_edges" if not edge_count else "no_path"
+            return {"path": None, "reason": reason}
         return path
+
+
+async def brain_diff(
+    topic: str, since: str, planet: str | None = None,
+    galaxy_id: str | None = None,
+) -> dict:
+    """Show what changed about a topic since a given date.
+
+    Parameters:
+    - topic: keyword or phrase to match against stardust content
+    - since: ISO 8601 datetime string (e.g. '2026-05-01' or '2026-05-01T00:00:00Z')
+    - planet: optional planet name to scope the search
+    """
+    from datetime import datetime
+    from sqlalchemy import and_
+    from app.models import Stardust, Planet as PlanetModel, Biome
+
+    galaxy_id = galaxy_id or await _get_galaxy_id()
+    if not galaxy_id:
+        return {"error": "No galaxy found"}
+
+    try:
+        since_dt = datetime.fromisoformat(since.replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        return {"error": f"Invalid 'since' datetime: '{since}'. Use ISO 8601 format e.g. '2026-05-01'."}
+
+    topic_lower = topic.lower()
+
+    async with async_session() as db:
+        q = select(Stardust).where(
+            Stardust.galaxy_id == galaxy_id,
+            Stardust.valid_from >= since_dt,
+        )
+        if planet:
+            planet_row = (await db.execute(
+                select(PlanetModel).where(PlanetModel.galaxy_id == galaxy_id, PlanetModel.name == planet)
+            )).scalar_one_or_none()
+            if not planet_row:
+                return {"error": f"Planet '{planet}' not found"}
+            q = q.where(Stardust.planet_id == planet_row.id)
+
+        rows = (await db.execute(q.order_by(Stardust.valid_from.asc()))).scalars().all()
+
+        added = []
+        superseded_ids: set[str] = set()
+
+        for s in rows:
+            if topic_lower not in s.content.lower():
+                continue
+            planet_name = (await db.execute(select(PlanetModel.name).where(PlanetModel.id == s.planet_id))).scalar() or ""
+            biome_name = (await db.execute(select(Biome.name).where(Biome.id == s.biome_id))).scalar() or ""
+            record = {
+                "id": s.id,
+                "content": s.content,
+                "planet": planet_name,
+                "biome": biome_name,
+                "region": s.region,
+                "confidence": s.confidence,
+                "valid_from": s.valid_from.isoformat(),
+                "source_agent": s.source_agent,
+            }
+            if s.supersedes:
+                record["supersedes"] = s.supersedes
+                superseded_ids.update(s.supersedes)
+            added.append(record)
+
+        return {
+            "topic": topic,
+            "since": since,
+            "planet": planet,
+            "changes_added": added,
+            "changes_superseded_ids": list(superseded_ids),
+            "summary": f"{len(added)} record(s) added, {len(superseded_ids)} superseded since {since}",
+        }

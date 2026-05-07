@@ -153,9 +153,25 @@ async def brain_graph_query(entity_name: str, relationship_types: list[str] | No
 @mcp.tool(name="brain.find_path")
 async def brain_find_path(source_concept: str, target_concept: str,
                            agent_name: str | None = None) -> dict:
-    """Find the connection between two concepts in your knowledge graph."""
+    """Find the connection between two concepts in your knowledge graph. When no path exists, returns reason: 'no_path' (concepts unrelated) or 'no_edges' (graph is empty)."""
     r = await client.brain_find_path(source_concept, target_concept)
+    if isinstance(r, dict) and r.get("path") is None and "reason" not in r:
+        r["reason"] = "no_path"
     return await _wrap(_resolve_agent(agent_name), "brain.find_path", r)
+
+@mcp.tool(name="brain.diff")
+async def brain_diff(topic: str, since: str, planet: str | None = None,
+                     agent_name: str | None = None) -> dict:
+    """Show what changed about a topic since a given date.
+
+    Parameters:
+    - topic: keyword or phrase to match against stardust content
+    - since: ISO 8601 datetime (e.g. '2026-05-01' or '2026-05-01T00:00:00')
+    - planet: optional planet name to scope the diff
+    """
+    r = await client.brain_diff(topic, since, planet)
+    return await _wrap(_resolve_agent(agent_name), "brain.diff", r)
+
 
 @mcp.tool(name="brain.ask")
 async def brain_ask(question: str, planet: str | None = None, depth: int = 2,
