@@ -178,7 +178,7 @@ async def stardust_get(stardust_id: str, galaxy_id: str | None = None) -> dict:
             "planet": planet_name, "biome": biome_name, "confidence": s.confidence,
             "source_agent": s.source_agent, "access_count": s.access_count,
             "valid_from": s.valid_from.isoformat() if s.valid_from else None,
-            "context_tags": tags,
+            "context_tags": tags, "reasoning": s.reasoning,
         }
 
 
