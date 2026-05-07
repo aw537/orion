@@ -26,8 +26,9 @@ export default function BiomeGraph({ biomeId, onNodeClick }: Props) {
     svg.selectAll('*').remove();
 
     const container = svgRef.current.parentElement!;
-    const W = container.clientWidth;
-    const H = container.clientHeight - 44; // minus nebula strip
+    const svgRect = svgRef.current.getBoundingClientRect();
+    const W = svgRect.width || container.clientWidth;
+    const H = (svgRect.height || container.clientHeight) - 44; // minus nebula strip
     svg.attr('viewBox', `0 0 ${W} ${H}`);
 
     // Backend returns { nodes, edges } where node.type = 'stardust' | 'entity'
