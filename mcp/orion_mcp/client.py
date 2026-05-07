@@ -259,8 +259,11 @@ async def stardust_delete(stardust_id: str):
 
 # ── Nebula (session logging) ────────────────────────────────────────
 
-async def graph_full():
-    return await _get("/api/v1/graph/full")
+async def graph_full(planet: str | None = None, max_nodes: int = 200):
+    params: dict = {"max_nodes": max_nodes}
+    if planet:
+        params["planet"] = planet
+    return await _get("/api/v1/graph/full", params)
 
 
 async def log_nebula_event(galaxy_id: str, action_type: str, initiated_by: str,

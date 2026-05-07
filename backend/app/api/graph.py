@@ -15,33 +15,54 @@ router = APIRouter(prefix="/api/v1/graph", tags=["graph"])
 
 @router.get("/full")
 async def full_graph(
+    planet: str | None = Query(default=None),
+    max_nodes: int = Query(default=200, le=1000),
     galaxy: Galaxy = Depends(get_galaxy_for_user), db: AsyncSession = Depends(get_db),
 ):
-    """Return the complete entity graph with planet colors for visualization."""
+    """Return the entity graph with planet colors. Use planet to scope to one domain."""
     # Load planets for color mapping
     planets = (await db.execute(select(Planet).where(Planet.galaxy_id == galaxy.id))).scalars().all()
     planet_map = {p.id: {"name": p.name, "color": p.color} for p in planets}
 
-    # All entities with degree counts
-    rows = await db.execute(text("""
+    # Resolve planet filter to planet_id
+    planet_id_filter = None
+    if planet:
+        matched = next((p for p in planets if p.name == planet), None)
+        if matched is None:
+            return {"entities": [], "edges": [], "planets": [
+                {"id": p.id, "name": p.name, "color": p.color} for p in planets
+            ]}
+        planet_id_filter = matched.id
+
+    # Entities with degree counts, optionally scoped to one planet
+    planet_clause = "AND e.planet_id = :planet_id" if planet_id_filter else ""
+    sql_params: dict = {"gid": galaxy.id, "limit": max_nodes}
+    if planet_id_filter:
+        sql_params["planet_id"] = planet_id_filter
+
+    rows = await db.execute(text(f"""
         SELECT e.id, e.name, e.entity_type, e.tier, e.planet_id, e.mention_count,
             (SELECT COUNT(*) FROM entity_relationships er
              WHERE er.source_entity_id = e.id OR er.target_entity_id = e.id) as degree
-        FROM entities e WHERE e.galaxy_id = :gid
-    """), {"gid": galaxy.id})
+        FROM entities e WHERE e.galaxy_id = :gid {planet_clause}
+        LIMIT :limit
+    """), sql_params)
     entities = []
+    entity_ids: set[str] = set()
     for r in rows:
         m = r._mapping
         pid = m["planet_id"]
         planet_info = planet_map.get(pid, {})
+        eid = m["id"]
+        entity_ids.add(eid)
         entities.append({
-            "id": m["id"], "name": m["name"], "type": m["entity_type"],
+            "id": eid, "name": m["name"], "type": m["entity_type"],
             "tier": m["tier"], "mentions": m["mention_count"], "degree": m["degree"],
             "planet_id": pid, "planet_name": planet_info.get("name"),
             "planet_color": planet_info.get("color", "#6B7280"),
         })
 
-    # All edges
+    # Edges scoped to retained entities
     rels = (await db.execute(
         select(EntityRelationship).where(EntityRelationship.galaxy_id == galaxy.id)
     )).scalars().all()
@@ -49,11 +70,15 @@ async def full_graph(
         {"source": r.source_entity_id, "target": r.target_entity_id,
          "type": r.relationship_type, "confidence": r.confidence, "strength": r.strength}
         for r in rels
+        if r.source_entity_id in entity_ids and r.target_entity_id in entity_ids
     ]
 
-    return {"entities": entities, "edges": edges, "planets": [
+    result = {"entities": entities, "edges": edges, "planets": [
         {"id": p.id, "name": p.name, "color": p.color} for p in planets
     ]}
+    if len(entities) == max_nodes:
+        result["truncated"] = True
+    return result
 
 
 @router.get("/entity/{entity_id}/neighborhood")

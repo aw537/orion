@@ -197,14 +197,7 @@ async def brain_graph_full(
     planet: str | None = None, max_nodes: int = 100, agent_name: str | None = None,
 ) -> dict:
     """Get the entity knowledge graph with all edges. Use planet to scope to one domain. max_nodes caps the result to avoid token explosion on large graphs."""
-    r = await client.graph_full()
-    if isinstance(r, dict) and "entities" in r and planet:
-        r["entities"] = [e for e in r["entities"] if e.get("planet_name") == planet]
-    if isinstance(r, dict) and "entities" in r and len(r["entities"]) > max_nodes:
-        entity_ids = {e["id"] for e in r["entities"][:max_nodes]}
-        r["entities"] = r["entities"][:max_nodes]
-        r["edges"] = [e for e in r.get("edges", []) if e.get("source") in entity_ids and e.get("target") in entity_ids]
-        r["truncated"] = True
+    r = await client.graph_full(planet=planet, max_nodes=max_nodes)
     return await _wrap(_resolve_agent(agent_name), "brain.graph_full", r)
 
 
