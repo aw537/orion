@@ -2,7 +2,7 @@
 import json
 import logging
 from datetime import timezone
-from sqlalchemy import select
+from sqlalchemy import select, func
 from app.database import async_session
 from app.mcp.utils import get_galaxy_id as _get_galaxy_id
 
@@ -274,7 +274,7 @@ async def brain_know(concept: str, depth: str = "summary", galaxy_id: str | None
         # Search for the concept
         from app.models import Entity
         entity = (await db.execute(
-            select(Entity).where(Entity.galaxy_id == galaxy_id, Entity.name == concept)
+            select(Entity).where(Entity.galaxy_id == galaxy_id, func.lower(Entity.name) == concept.lower())
         )).scalar_one_or_none()
 
         # Get related stardust via search
@@ -322,7 +322,7 @@ async def brain_graph_query(
     async with async_session() as db:
         from app.models import Entity
         entity = (await db.execute(
-            select(Entity).where(Entity.galaxy_id == galaxy_id, Entity.name == entity_name)
+            select(Entity).where(Entity.galaxy_id == galaxy_id, func.lower(Entity.name) == entity_name.lower())
         )).scalar_one_or_none()
         if not entity:
             return {"error": f"Entity '{entity_name}' not found"}
@@ -343,10 +343,10 @@ async def brain_find_path(source_concept: str, target_concept: str, galaxy_id: s
     async with async_session() as db:
         from app.models import Entity
         source = (await db.execute(
-            select(Entity).where(Entity.galaxy_id == galaxy_id, Entity.name == source_concept)
+            select(Entity).where(Entity.galaxy_id == galaxy_id, func.lower(Entity.name) == source_concept.lower())
         )).scalar_one_or_none()
         target = (await db.execute(
-            select(Entity).where(Entity.galaxy_id == galaxy_id, Entity.name == target_concept)
+            select(Entity).where(Entity.galaxy_id == galaxy_id, func.lower(Entity.name) == target_concept.lower())
         )).scalar_one_or_none()
         if not source:
             return {"error": f"Entity '{source_concept}' not found"}

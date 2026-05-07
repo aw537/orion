@@ -216,7 +216,7 @@ async def memory_entity_get(entity_name: str, planet: str | None = None, galaxy_
         return {"error": "No galaxy found"}
 
     async with async_session() as db:
-        q = select(Entity).where(Entity.galaxy_id == galaxy_id, Entity.name == entity_name)
+        q = select(Entity).where(Entity.galaxy_id == galaxy_id, func.lower(Entity.name) == entity_name.lower())
         if planet:
             p = (await db.execute(select(Planet).where(Planet.galaxy_id == galaxy_id, Planet.name == planet))).scalar_one_or_none()
             if p:
