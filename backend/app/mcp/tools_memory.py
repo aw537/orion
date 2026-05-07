@@ -225,9 +225,11 @@ async def memory_entity_get(entity_name: str, planet: str | None = None, galaxy_
         if not entity:
             return {"error": f"Entity '{entity_name}' not found"}
 
-        profile = json.loads(entity.profile) if isinstance(entity.profile, str) else entity.profile
         links = (await db.execute(select(EntityStardust).where(EntityStardust.entity_id == entity.id))).scalars().all()
         stardust_ids = [l.stardust_id for l in links]
+        primary_planet = None
+        if entity.planet_id:
+            primary_planet = (await db.execute(select(Planet.name).where(Planet.id == entity.planet_id))).scalar()
         related = []
         if stardust_ids:
             rows = (await db.execute(select(Stardust).where(Stardust.id.in_(stardust_ids)).limit(10))).scalars().all()
@@ -241,6 +243,12 @@ async def memory_entity_get(entity_name: str, planet: str | None = None, galaxy_
         timeline = [{"event_date": t.event_date.isoformat(), "event_type": t.event_type, "event_content": t.event_content} for t in timeline_rows]
         rel_types = list({l.relationship_type for l in links if l.relationship_type})
 
+        profile = {
+            "primary_planet": primary_planet,
+            "stardust_count": len(stardust_ids),
+            "relationship_type_count": len(rel_types),
+            "relationship_types": rel_types,
+        }
         return {
             "entity": {"id": entity.id, "name": entity.name, "entity_type": entity.entity_type, "tier": entity.tier, "profile": profile, "mention_count": entity.mention_count, "first_seen": entity.first_seen.isoformat(), "last_seen": entity.last_seen.isoformat()},
             "related_stardust": related, "timeline": timeline, "relationship_types": rel_types,
