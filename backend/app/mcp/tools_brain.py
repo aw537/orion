@@ -1,7 +1,8 @@
-"""Brain namespace — eight cognitive tools for AI agents operating from Orion."""
+"""Brain namespace — cognitive tools for AI agents operating from Orion."""
 import json
 import logging
-from sqlalchemy import select
+from datetime import timezone
+from sqlalchemy import select, func
 from app.database import async_session
 from app.mcp.utils import get_galaxy_id as _get_galaxy_id
 
@@ -12,6 +13,7 @@ async def brain_orient(
     agent_name: str, model: str, agent_type: str = "GENERAL",
     active_planet: str | None = None, active_biome: str | None = None,
     max_tokens: int | None = None,
+    include_biome_stardust: bool = False,
     galaxy_id: str | None = None,
 ) -> dict:
     """Orient yourself in your Galaxy at the start of every session."""
@@ -48,7 +50,15 @@ async def brain_orient(
         orientation = await orientation_service.build_orientation(
             identity, galaxy_id, active_planet, active_biome, max_tokens, db,
         )
-        return orientation
+
+    if include_biome_stardust:
+        from app.mcp import tools_memory
+        orientation["biome_context"] = await tools_memory.memory_context(
+            planet=active_planet, biome=active_biome,
+            max_tokens=max_tokens or 4000, galaxy_id=galaxy_id,
+        )
+
+    return orientation
 
 
 async def brain_think(
@@ -248,7 +258,7 @@ async def brain_health(agent_name: str, galaxy_id: str | None = None) -> dict:
             select(AgentIdentity).where(AgentIdentity.galaxy_id == galaxy_id, AgentIdentity.agent_name == agent_name)
         )).scalar_one_or_none()
         if not identity:
-            return {"error": f"Agent '{agent_name}' not found. Call brain.orient first."}
+            return {"error": f"Agent '{agent_name}' not found. Call brain.orient first.", "hint": "Use brain.orient to register your agent identity before calling brain.health."}
         result = await brain_health_service.get_brain_health(identity, galaxy_id, db)
         return result
 
@@ -264,7 +274,7 @@ async def brain_know(concept: str, depth: str = "summary", galaxy_id: str | None
         # Search for the concept
         from app.models import Entity
         entity = (await db.execute(
-            select(Entity).where(Entity.galaxy_id == galaxy_id, Entity.name == concept)
+            select(Entity).where(Entity.galaxy_id == galaxy_id, func.lower(Entity.name) == concept.lower())
         )).scalar_one_or_none()
 
         # Get related stardust via search
@@ -312,7 +322,7 @@ async def brain_graph_query(
     async with async_session() as db:
         from app.models import Entity
         entity = (await db.execute(
-            select(Entity).where(Entity.galaxy_id == galaxy_id, Entity.name == entity_name)
+            select(Entity).where(Entity.galaxy_id == galaxy_id, func.lower(Entity.name) == entity_name.lower())
         )).scalar_one_or_none()
         if not entity:
             return {"error": f"Entity '{entity_name}' not found"}
@@ -333,10 +343,10 @@ async def brain_find_path(source_concept: str, target_concept: str, galaxy_id: s
     async with async_session() as db:
         from app.models import Entity
         source = (await db.execute(
-            select(Entity).where(Entity.galaxy_id == galaxy_id, Entity.name == source_concept)
+            select(Entity).where(Entity.galaxy_id == galaxy_id, func.lower(Entity.name) == source_concept.lower())
         )).scalar_one_or_none()
         target = (await db.execute(
-            select(Entity).where(Entity.galaxy_id == galaxy_id, Entity.name == target_concept)
+            select(Entity).where(Entity.galaxy_id == galaxy_id, func.lower(Entity.name) == target_concept.lower())
         )).scalar_one_or_none()
         if not source:
             return {"error": f"Entity '{source_concept}' not found"}
@@ -345,5 +355,98 @@ async def brain_find_path(source_concept: str, target_concept: str, galaxy_id: s
 
         path = await graph_service.find_path(source.id, target.id, galaxy_id, db)
         if not path:
-            return None
+            from app.models import EntityStardust
+            edge_count = (await db.execute(
+                select(EntityStardust).limit(1)
+            )).first()
+            reason = "no_edges" if not edge_count else "no_path"
+            return {"path": None, "reason": reason}
         return path
+
+
+async def brain_diff(
+    topic: str, since: str, planet: str | None = None,
+    galaxy_id: str | None = None,
+) -> dict:
+    """Show what changed about a topic since a given date.
+
+    Parameters:
+    - topic: keyword or phrase to match against stardust content
+    - since: ISO 8601 datetime string (e.g. '2026-05-01' or '2026-05-01T00:00:00Z')
+    - planet: optional planet name to scope the search
+    """
+    from datetime import datetime
+    from sqlalchemy import and_
+    from app.models import Stardust, Planet as PlanetModel, Biome
+
+    galaxy_id = galaxy_id or await _get_galaxy_id()
+    if not galaxy_id:
+        return {"error": "No galaxy found"}
+
+    try:
+        since_dt = datetime.fromisoformat(since.replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        return {"error": f"Invalid 'since' datetime: '{since}'. Use ISO 8601 format e.g. '2026-05-01'."}
+
+    topic_lower = topic.lower()
+
+    async with async_session() as db:
+        q = select(Stardust).where(
+            Stardust.galaxy_id == galaxy_id,
+            Stardust.valid_from >= since_dt,
+        )
+        if planet:
+            planet_row = (await db.execute(
+                select(PlanetModel).where(PlanetModel.galaxy_id == galaxy_id, PlanetModel.name == planet)
+            )).scalar_one_or_none()
+            if not planet_row:
+                return {"error": f"Planet '{planet}' not found"}
+            q = q.where(Stardust.planet_id == planet_row.id)
+
+        rows = (await db.execute(q.order_by(Stardust.valid_from.asc()))).scalars().all()
+
+        added = []
+        superseded_ids: set[str] = set()
+
+        for s in rows:
+            if topic_lower not in s.content.lower():
+                continue
+            planet_name = (await db.execute(select(PlanetModel.name).where(PlanetModel.id == s.planet_id))).scalar() or ""
+            biome_name = (await db.execute(select(Biome.name).where(Biome.id == s.biome_id))).scalar() or ""
+            record = {
+                "id": s.id,
+                "content": s.content,
+                "planet": planet_name,
+                "biome": biome_name,
+                "region": s.region,
+                "confidence": s.confidence,
+                "valid_from": s.valid_from.isoformat(),
+                "source_agent": s.source_agent,
+            }
+            if s.supersedes:
+                record["supersedes"] = s.supersedes
+                superseded_ids.update(s.supersedes)
+            added.append(record)
+
+        superseded = []
+        if superseded_ids:
+            s_rows = (await db.execute(select(Stardust).where(Stardust.id.in_(list(superseded_ids))))).scalars().all()
+            for sr in s_rows:
+                sp_name = (await db.execute(select(PlanetModel.name).where(PlanetModel.id == sr.planet_id))).scalar() or ""
+                sb_name = (await db.execute(select(Biome.name).where(Biome.id == sr.biome_id))).scalar() or ""
+                superseded.append({
+                    "id": sr.id, "content": sr.content, "planet": sp_name,
+                    "biome": sb_name, "region": sr.region, "confidence": sr.confidence,
+                    "valid_from": sr.valid_from.isoformat() if sr.valid_from else None,
+                    "source_agent": sr.source_agent,
+                })
+
+        return {
+            "topic": topic,
+            "since": since,
+            "planet": planet,
+            "changes_added": added,
+            "changes_superseded": superseded,
+            "changes_superseded_ids": list(superseded_ids),
+            "summary": f"{len(added)} record(s) added, {len(superseded_ids)} superseded since {since}",
+        }

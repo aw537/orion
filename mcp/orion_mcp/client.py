@@ -84,10 +84,11 @@ async def _put(path: str, json: dict | None = None) -> dict:
 
 # ── Brain endpoints ─────────────────────────────────────────────────
 
-async def brain_orient(agent_name, model, agent_type="GENERAL", active_planet=None, active_biome=None, max_tokens=None):
+async def brain_orient(agent_name, model, agent_type="GENERAL", active_planet=None, active_biome=None, max_tokens=None, include_biome_stardust=False):
     return await _post("/api/v1/brain/orient", {
         "agent_name": agent_name, "model": model, "agent_type": agent_type,
         "active_planet": active_planet, "active_biome": active_biome, "max_tokens": max_tokens,
+        "include_biome_stardust": include_biome_stardust,
     })
 
 async def brain_think(content, planet, biome=None, cognitive_mode="contextual", confidence=0.7,
@@ -135,6 +136,9 @@ async def brain_find_path(source_concept, target_concept):
         "source_concept": source_concept, "target_concept": target_concept,
     })
 
+async def brain_diff(topic: str, since: str, planet: str | None = None):
+    return await _post("/api/v1/brain/diff", {"topic": topic, "since": since, "planet": planet})
+
 async def brain_ask(question, planet=None, depth=2):
     return await _post("/api/v1/ask", {"question": question, "planet": planet, "depth": depth})
 
@@ -144,6 +148,7 @@ async def brain_synthesize(topic, planet=None, biome=None, include_open_question
         "topic": topic, "planet": planet, "biome": biome,
         "include_open_questions": include_open_questions,
         "include_contradictions": include_contradictions,
+        "max_tokens": max_tokens,
     })
 
 
@@ -182,19 +187,31 @@ async def sun_read(section=None):
     return await _get("/api/v1/sun")
 
 async def sun_update(section_key, content, summary):
-    return await _put(f"/api/v1/sun/{section_key}", content)
+    return await _put(f"/api/v1/sun/{section_key}", {"content": content, "changed_by": "agent", "summary": summary})
 
-async def sun_working_context(current_focus=None, add_blocker=None, add_decision=None, add_hot_biome=None):
+async def sun_working_context(
+    current_focus=None, add_blocker=None, remove_blocker=None,
+    add_decision=None, add_hot_biome=None, remove_hot_biome=None,
+    clear_decisions=False,
+):
     results = {}
     if current_focus is not None:
         wc = await _get("/api/v1/sun/working_context")
         c = wc.get("content", {}) if isinstance(wc, dict) and "error" not in wc else {}
         c["current_focus"] = current_focus
-        results["focus"] = await _put("/api/v1/sun/working_context", c)
+        results["focus"] = await _put("/api/v1/sun/working_context", {"content": c, "changed_by": "agent", "summary": f"Set current focus: {str(current_focus)[:50]}"})
     if add_blocker:
         results["blocker"] = await _post("/api/v1/sun/working-context/add-blocker", {"blocker": add_blocker})
+    if remove_blocker:
+        results["remove_blocker"] = await _post("/api/v1/sun/working-context/remove-blocker", {"blocker": remove_blocker})
+    if add_hot_biome:
+        results["hot_biome"] = await _post("/api/v1/sun/working-context/add-hot-biome", {"biome": add_hot_biome})
+    if remove_hot_biome:
+        results["remove_hot_biome"] = await _post("/api/v1/sun/working-context/remove-hot-biome", {"biome": remove_hot_biome})
     if add_decision:
         results["decision"] = await _post("/api/v1/sun/working-context/add-decision", {"decision": add_decision})
+    if clear_decisions:
+        results["clear_decisions"] = await _post("/api/v1/sun/working-context/clear-decisions", {})
     return results or {"status": "no changes"}
 
 
@@ -205,17 +222,49 @@ async def sun_lesson(correction: str, context: str = "", tags: list[str] | None 
     })
 
 
-async def sun_get_lessons(tags: list[str] | None = None, limit: int = 50):
-    params = f"?limit={limit}"
+async def sun_lesson_list(tags: list[str] | None = None, limit: int = 50, include_resolved: bool = False):
+    params: dict = {"limit": limit, "include_resolved": str(include_resolved).lower()}
     if tags:
-        params += f"&tags={','.join(tags)}"
-    return await _get(f"/api/v1/sun/lessons{params}")
+        params["tags"] = ",".join(tags)
+    lessons = await _get("/api/v1/sun/lessons", params)
+    if isinstance(lessons, list):
+        return {"lessons": lessons, "total": len(lessons)}
+    return lessons
+
+
+async def sun_lesson_resolve(lesson_id: str):
+    return await _post(f"/api/v1/sun/lessons/{lesson_id}/resolve")
+
+
+# ── Planet / Biome / Stardust management ───────────────────────────────────
+
+async def planet_list():
+    return await _get("/api/v1/brain/planets")
+
+async def biome_list(planet: str | None = None):
+    params = {"planet": planet} if planet else None
+    return await _get("/api/v1/brain/biomes", params)
+
+async def stardust_get(stardust_id: str):
+    return await _get(f"/api/v1/brain/stardust/{stardust_id}")
+
+async def stardust_delete(stardust_id: str):
+    try:
+        c = _get_client()
+        r = await c.delete(f"/api/v1/brain/stardust/{stardust_id}", headers=_headers())
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        return {"error": str(e)}
 
 
 # ── Nebula (session logging) ────────────────────────────────────────
 
-async def graph_full():
-    return await _get("/api/v1/graph/full")
+async def graph_full(planet: str | None = None, max_nodes: int = 200):
+    params: dict = {"max_nodes": max_nodes}
+    if planet:
+        params["planet"] = planet
+    return await _get("/api/v1/graph/full", params)
 
 
 async def log_nebula_event(galaxy_id: str, action_type: str, initiated_by: str,

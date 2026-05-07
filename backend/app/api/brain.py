@@ -16,6 +16,7 @@ class OrientRequest(BaseModel):
     active_planet: str | None = None
     active_biome: str | None = None
     max_tokens: int | None = None
+    include_biome_stardust: bool = False
 
 
 class ThinkRequest(BaseModel):
@@ -70,6 +71,12 @@ class FindPathRequest(BaseModel):
     target_concept: str
 
 
+class DiffRequest(BaseModel):
+    topic: str
+    since: str
+    planet: str | None = None
+
+
 class ContextRequest(BaseModel):
     planet: str | None = None
     biome: str | None = None
@@ -96,6 +103,7 @@ async def orient(body: OrientRequest, user: User = Depends(get_current_user), ga
     return await tools_brain.brain_orient(
         body.agent_name, body.model, body.agent_type,
         body.active_planet, body.active_biome, body.max_tokens,
+        body.include_biome_stardust,
         galaxy_id=galaxy.id,
     )
 
@@ -153,6 +161,11 @@ async def find_path(body: FindPathRequest, user: User = Depends(get_current_user
     return result or {"path": None, "message": "No path found"}
 
 
+@router.post("/diff")
+async def diff(body: DiffRequest, user: User = Depends(get_current_user), galaxy: Galaxy = Depends(get_galaxy_for_user)):
+    return await tools_brain.brain_diff(body.topic, body.since, body.planet, galaxy_id=galaxy.id)
+
+
 @router.post("/context")
 async def context(body: ContextRequest, user: User = Depends(get_current_user), galaxy: Galaxy = Depends(get_galaxy_for_user)):
     return await tools_memory.memory_context(body.planet, body.biome, body.max_tokens, body.model, galaxy_id=galaxy.id)
@@ -174,3 +187,23 @@ async def entity_get(body: EntityGetRequest, user: User = Depends(get_current_us
 @router.get("/status")
 async def status(user: User = Depends(get_current_user), galaxy: Galaxy = Depends(get_galaxy_for_user)):
     return await tools_memory.memory_status(galaxy_id=galaxy.id)
+
+
+@router.get("/planets")
+async def planet_list(user: User = Depends(get_current_user), galaxy: Galaxy = Depends(get_galaxy_for_user)):
+    return await tools_memory.planet_list(galaxy_id=galaxy.id)
+
+
+@router.get("/biomes")
+async def biome_list(planet: str | None = None, user: User = Depends(get_current_user), galaxy: Galaxy = Depends(get_galaxy_for_user)):
+    return await tools_memory.biome_list(planet=planet, galaxy_id=galaxy.id)
+
+
+@router.get("/stardust/{stardust_id}")
+async def stardust_get(stardust_id: str, user: User = Depends(get_current_user), galaxy: Galaxy = Depends(get_galaxy_for_user)):
+    return await tools_memory.stardust_get(stardust_id, galaxy_id=galaxy.id)
+
+
+@router.delete("/stardust/{stardust_id}")
+async def stardust_delete(stardust_id: str, user: User = Depends(get_current_user), galaxy: Galaxy = Depends(get_galaxy_for_user)):
+    return await tools_memory.stardust_delete(stardust_id, galaxy_id=galaxy.id)

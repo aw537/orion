@@ -24,7 +24,7 @@ You can paste an existing CLAUDE.md, .cursorrules, or any markdown content here.
 DEFAULT_SUN = {
     "identity": {"name": "", "role": "", "primary_domain": "", "working_style": "", "timezone": "", "galaxy_purpose": ""},
     "values": {"principles": [], "communication_style": "direct", "contradiction_preference": "flag_and_ask", "citation_required": True},
-    "agent_protocol": {"write_rules": [], "read_rules": [], "uncertainty_handling": "Flag low-confidence results explicitly.", "session_start_instruction": "Call orion_context to load current project context.", "session_end_instruction": "Write any new decisions or learnings to the active Biome."},
+    "agent_protocol": {"write_rules": [], "read_rules": [], "uncertainty_handling": "Flag low-confidence results explicitly.", "session_start_instruction": "Call brain.orient to register your agent identity and load current Galaxy context. Required at the start of every session.", "session_end_instruction": "Use brain.think to persist new decisions and learnings before ending the session. Then call brain.calibrate to improve future retrieval."},
     "planet_registry": {"planets": []},
     "working_context": {"current_focus": "", "hot_biomes": [], "recent_decisions": [], "blockers": [], "updated_at": ""},
     "evolution_log": {"entries": []},
@@ -257,8 +257,8 @@ async def append_lesson(galaxy_id: str, correction: str, context: str, tags: lis
         return await _do(session, should_commit=True)
 
 
-async def get_lessons(galaxy_id: str, tags: list[str] | None = None, limit: int = 50, db: AsyncSession | None = None) -> list[dict]:
-    """Get lessons, optionally filtered by tags."""
+async def get_lessons(galaxy_id: str, tags: list[str] | None = None, limit: int = 50, include_resolved: bool = False, db: AsyncSession | None = None) -> list[dict]:
+    """Get lessons, optionally filtered by tags. Active only by default; set include_resolved=True to include resolved ones."""
     async def _fetch(session):
         row = (await session.execute(
             select(SunSection).where(SunSection.galaxy_id == galaxy_id, SunSection.section_key == "lessons")
@@ -269,12 +269,46 @@ async def get_lessons(galaxy_id: str, tags: list[str] | None = None, limit: int 
         entries = content.get("entries", [])
         if tags:
             entries = [e for e in entries if any(t in e.get("tags", []) for t in tags)]
-        return [e for e in entries if e.get("status") == "active"][-limit:]
+        if not include_resolved:
+            entries = [e for e in entries if e.get("status") == "active"]
+        return entries[-limit:]
 
     if db:
         return await _fetch(db)
     async with async_session() as session:
         return await _fetch(session)
+
+
+async def resolve_lesson(galaxy_id: str, lesson_id: str, db: AsyncSession | None = None) -> dict:
+    """Mark a lesson as resolved. Returns the updated lesson entry."""
+    async def _do(session, should_commit: bool):
+        row = (await session.execute(
+            select(SunSection).where(SunSection.galaxy_id == galaxy_id, SunSection.section_key == "lessons")
+        )).scalar_one_or_none()
+        if not row:
+            raise ValueError("lessons section not found")
+        content = _parse_content(row.content)
+        entries = content.get("entries", [])
+        target = next((e for e in entries if e.get("id") == lesson_id), None)
+        if not target:
+            raise KeyError(f"Lesson '{lesson_id}' not found")
+        target["status"] = "resolved"
+        target["resolved_at"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+        row.content = {"entries": entries}
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(row, "content")
+        row.version += 1
+        row.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        if should_commit:
+            await session.commit()
+        else:
+            await session.flush()
+        return target
+
+    if db:
+        return await _do(db, should_commit=True)
+    async with async_session() as session:
+        return await _do(session, should_commit=True)
 
 
 async def reimport_steering_doc(galaxy_id: str, db: AsyncSession) -> dict:
