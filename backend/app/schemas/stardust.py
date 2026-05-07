@@ -54,6 +54,10 @@ class WriteReceipt(BaseModel):
     stardust_id: str
     biome_id: str
     planet_id: str
+    planet_name: str = ""
+    biome_name: str = ""
+    routing_method: str = ""
+    routing_reasoning: str = ""
     layer: str = "cache"
     cache_ttl_seconds: int = 28800
     nebula_event_id: int | None = None

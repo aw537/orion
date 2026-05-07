@@ -218,6 +218,8 @@ async def write_stardust(
         return WriteReceipt(
             status="written_with_conflict" if conflict_id else "success",
             stardust_id=stardust_id, biome_id=biome.id, planet_id=planet.id,
+            planet_name=planet.name, biome_name=biome.name,
+            routing_method=assignment.method, routing_reasoning=assignment.reasoning,
             cache_ttl_seconds=biome.cache_ttl_seconds, nebula_event_id=event_id,
             contradiction_check="conflict" if conflict_id else "clean",
             contradiction=contradiction_info,

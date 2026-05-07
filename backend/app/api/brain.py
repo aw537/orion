@@ -21,7 +21,7 @@ class OrientRequest(BaseModel):
 
 class ThinkRequest(BaseModel):
     content: str
-    planet: str
+    planet: str | None = None
     biome: str | None = None
     cognitive_mode: str = "contextual"
     confidence: float = 0.7
@@ -86,7 +86,7 @@ class ContextRequest(BaseModel):
 
 class WriteRequest(BaseModel):
     content: str
-    planet: str
+    planet: str | None = None
     biome: str | None = None
     region: str = "contextual"
     context_tags: list[str] | None = None
