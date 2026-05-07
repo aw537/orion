@@ -133,10 +133,10 @@ async def memory_entity_get(entity_name: str, planet: str | None = None) -> dict
 async def brain_orient(
     agent_name: str, model: str, agent_type: str = "GENERAL",
     active_planet: str | None = None, active_biome: str | None = None,
-    max_tokens: int | None = None,
+    max_tokens: int | None = None, include_biome_stardust: bool = False,
 ) -> dict:
-    """Orient yourself in your Galaxy at the start of every session. REQUIRED: Call this once at session start. Returns your persistent identity, accumulated expertise, current context, synthesized knowledge state, and operating protocol."""
-    result = await tools_brain.brain_orient(agent_name, model, agent_type, active_planet, active_biome, max_tokens)
+    """Orient yourself in your Galaxy at the start of every session. REQUIRED: Call this once at session start. Returns your persistent identity, accumulated expertise, current context, synthesized knowledge state, and operating protocol. Set include_biome_stardust=true to also embed biome-scoped stardust in one call (eliminates a follow-up memory.context call)."""
+    result = await tools_brain.brain_orient(agent_name, model, agent_type, active_planet, active_biome, max_tokens, include_biome_stardust)
     return await _session_wrap(agent_name, "brain.orient", result)
 
 

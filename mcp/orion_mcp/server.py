@@ -90,9 +90,10 @@ async def memory_entity_get(entity_name: str, planet: str | None = None) -> dict
 @mcp.tool(name="brain.orient")
 async def brain_orient(agent_name: str, model: str, agent_type: str = "GENERAL",
                         active_planet: str | None = None, active_biome: str | None = None,
-                        max_tokens: int | None = None) -> dict:
-    """Orient yourself in your Galaxy at the start of every session."""
-    r = await client.brain_orient(agent_name, model, agent_type, active_planet, active_biome, max_tokens)
+                        max_tokens: int | None = None,
+                        include_biome_stardust: bool = False) -> dict:
+    """Orient yourself in your Galaxy at the start of every session. Set include_biome_stardust=true to embed biome-scoped stardust in one call (eliminates a follow-up memory.context call)."""
+    r = await client.brain_orient(agent_name, model, agent_type, active_planet, active_biome, max_tokens, include_biome_stardust)
     return await _wrap(agent_name, "brain.orient", r)
 
 @mcp.tool(name="brain.think")

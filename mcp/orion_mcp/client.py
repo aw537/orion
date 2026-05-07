@@ -84,10 +84,11 @@ async def _put(path: str, json: dict | None = None) -> dict:
 
 # ── Brain endpoints ─────────────────────────────────────────────────
 
-async def brain_orient(agent_name, model, agent_type="GENERAL", active_planet=None, active_biome=None, max_tokens=None):
+async def brain_orient(agent_name, model, agent_type="GENERAL", active_planet=None, active_biome=None, max_tokens=None, include_biome_stardust=False):
     return await _post("/api/v1/brain/orient", {
         "agent_name": agent_name, "model": model, "agent_type": agent_type,
         "active_planet": active_planet, "active_biome": active_biome, "max_tokens": max_tokens,
+        "include_biome_stardust": include_biome_stardust,
     })
 
 async def brain_think(content, planet, biome=None, cognitive_mode="contextual", confidence=0.7,

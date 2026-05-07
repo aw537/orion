@@ -16,6 +16,7 @@ class OrientRequest(BaseModel):
     active_planet: str | None = None
     active_biome: str | None = None
     max_tokens: int | None = None
+    include_biome_stardust: bool = False
 
 
 class ThinkRequest(BaseModel):
@@ -96,6 +97,7 @@ async def orient(body: OrientRequest, user: User = Depends(get_current_user), ga
     return await tools_brain.brain_orient(
         body.agent_name, body.model, body.agent_type,
         body.active_planet, body.active_biome, body.max_tokens,
+        body.include_biome_stardust,
         galaxy_id=galaxy.id,
     )
 

@@ -13,6 +13,7 @@ async def brain_orient(
     agent_name: str, model: str, agent_type: str = "GENERAL",
     active_planet: str | None = None, active_biome: str | None = None,
     max_tokens: int | None = None,
+    include_biome_stardust: bool = False,
     galaxy_id: str | None = None,
 ) -> dict:
     """Orient yourself in your Galaxy at the start of every session."""
@@ -49,7 +50,15 @@ async def brain_orient(
         orientation = await orientation_service.build_orientation(
             identity, galaxy_id, active_planet, active_biome, max_tokens, db,
         )
-        return orientation
+
+    if include_biome_stardust:
+        from app.mcp import tools_memory
+        orientation["biome_context"] = await tools_memory.memory_context(
+            planet=active_planet, biome=active_biome,
+            max_tokens=max_tokens or 4000, galaxy_id=galaxy_id,
+        )
+
+    return orientation
 
 
 async def brain_think(
