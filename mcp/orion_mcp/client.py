@@ -148,6 +148,7 @@ async def brain_synthesize(topic, planet=None, biome=None, include_open_question
         "topic": topic, "planet": planet, "biome": biome,
         "include_open_questions": include_open_questions,
         "include_contradictions": include_contradictions,
+        "max_tokens": max_tokens,
     })
 
 
@@ -186,7 +187,7 @@ async def sun_read(section=None):
     return await _get("/api/v1/sun")
 
 async def sun_update(section_key, content, summary):
-    return await _put(f"/api/v1/sun/{section_key}", content)
+    return await _put(f"/api/v1/sun/{section_key}", {"content": content, "changed_by": "agent", "summary": summary})
 
 async def sun_working_context(
     current_focus=None, add_blocker=None, remove_blocker=None,
