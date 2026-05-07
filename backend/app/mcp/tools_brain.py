@@ -416,6 +416,12 @@ async def brain_diff(
 
     topic_lower = topic.lower()
 
+    # Semantic search for relevant record IDs — fall back to substring on empty index
+    from app.services import search_service
+    semantic_result = await search_service.search(topic, galaxy_id, planet_name=planet, limit=200)
+    relevant_ids = {r["id"] for r in semantic_result.model_dump(mode="json").get("records", [])}
+    use_semantic = bool(relevant_ids)
+
     async with async_session() as db:
         q = select(Stardust).where(
             Stardust.galaxy_id == galaxy_id,
@@ -435,7 +441,10 @@ async def brain_diff(
         superseded_ids: set[str] = set()
 
         for s in rows:
-            if topic_lower not in s.content.lower():
+            if use_semantic:
+                if s.id not in relevant_ids:
+                    continue
+            elif topic_lower not in s.content.lower():
                 continue
             planet_name = (await db.execute(select(PlanetModel.name).where(PlanetModel.id == s.planet_id))).scalar() or ""
             biome_name = (await db.execute(select(Biome.name).where(Biome.id == s.biome_id))).scalar() or ""
