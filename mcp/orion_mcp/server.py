@@ -232,6 +232,12 @@ async def orion_session_end(summary: str = "", agent_name: str | None = None) ->
     return {"status": "session_ended", **stats}
 
 
+@mcp.custom_route("/health", methods=["GET"], include_in_schema=False)
+async def health_check(request):
+    from starlette.responses import JSONResponse
+    return JSONResponse({"status": "ok"})
+
+
 def main():
     logger.info(f"Starting Orion MCP server on port {MCP_PORT}")
     logger.info(f"Backend API: {client.API_BASE}")

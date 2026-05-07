@@ -1,8 +1,8 @@
-"""Memory namespace — the five existing tools renamed to memory.* prefix.
-Behavior is identical. Only the name changes."""
+"""Memory namespace — knowledge storage and retrieval tools."""
 import json
 import logging
-from sqlalchemy import select, func
+from datetime import timezone
+from sqlalchemy import select, func, delete
 from app.database import async_session
 from app.models import Galaxy, Planet, Biome, Entity, EntityStardust, EntityTimeline, Stardust, Contradiction
 from app.services import search_service, stardust_service, context_service, sun_service
@@ -124,6 +124,89 @@ async def memory_status(galaxy_id: str | None = None) -> dict:
             "last_audit_at": None, "contradiction_count_unresolved": unresolved,
             "sun_summary": sun_summary,
         }
+
+
+async def planet_list(galaxy_id: str | None = None) -> dict:
+    """Enumerate all planets and their biomes in the Galaxy, including those not in the Sun registry."""
+    galaxy_id = galaxy_id or await _get_galaxy_id()
+    if not galaxy_id:
+        return {"error": "No galaxy found"}
+    async with async_session() as db:
+        planets = (await db.execute(select(Planet).where(Planet.galaxy_id == galaxy_id).order_by(Planet.name))).scalars().all()
+        result = []
+        for p in planets:
+            biomes = (await db.execute(
+                select(Biome).where(Biome.planet_id == p.id, Biome.lifecycle_state.in_(["SEED", "ACTIVE", "MATURE"]))
+                .order_by(Biome.name)
+            )).scalars().all()
+            result.append({
+                "id": p.id, "name": p.name, "description": p.description,
+                "stardust_count": p.stardust_count, "health_status": p.health_status,
+                "biomes": [{"id": b.id, "name": b.name, "lifecycle_state": b.lifecycle_state, "stardust_count": b.stardust_count} for b in biomes],
+            })
+        return {"planets": result, "total": len(result)}
+
+
+async def biome_list(planet: str | None = None, galaxy_id: str | None = None) -> dict:
+    """List all biomes across a planet (or all planets). Use when you need to know valid biome names before writing stardust."""
+    galaxy_id = galaxy_id or await _get_galaxy_id()
+    if not galaxy_id:
+        return {"error": "No galaxy found"}
+    async with async_session() as db:
+        q = select(Biome, Planet.name.label("planet_name")).join(Planet, Biome.planet_id == Planet.id).where(Planet.galaxy_id == galaxy_id)
+        if planet:
+            q = q.where(Planet.name == planet)
+        rows = (await db.execute(q.order_by(Planet.name, Biome.name))).all()
+        biomes = [{"id": b.id, "name": b.name, "planet": pn, "lifecycle_state": b.lifecycle_state, "stardust_count": b.stardust_count} for b, pn in rows]
+        return {"biomes": biomes, "total": len(biomes)}
+
+
+async def stardust_get(stardust_id: str, galaxy_id: str | None = None) -> dict:
+    """Fetch a specific stardust record by ID. Use to verify what was written or to retrieve the record before superseding it."""
+    galaxy_id = galaxy_id or await _get_galaxy_id()
+    if not galaxy_id:
+        return {"error": "No galaxy found"}
+    async with async_session() as db:
+        s = (await db.execute(select(Stardust).where(Stardust.id == stardust_id, Stardust.galaxy_id == galaxy_id))).scalar_one_or_none()
+        if not s:
+            return {"error": f"Stardust record '{stardust_id}' not found"}
+        planet_name = (await db.execute(select(Planet.name).where(Planet.id == s.planet_id))).scalar()
+        biome_name = (await db.execute(select(Biome.name).where(Biome.id == s.biome_id))).scalar()
+        tags = json.loads(s.context_tags) if isinstance(s.context_tags, str) else s.context_tags
+        return {
+            "id": s.id, "content": s.content, "region": s.region, "gravity": s.gravity,
+            "planet": planet_name, "biome": biome_name, "confidence": s.confidence,
+            "source_agent": s.source_agent, "access_count": s.access_count,
+            "valid_from": s.valid_from.isoformat() if s.valid_from else None,
+            "context_tags": tags,
+        }
+
+
+async def stardust_delete(stardust_id: str, galaxy_id: str | None = None) -> dict:
+    """Permanently delete a stardust record by ID. Use to remove incorrect or test writes. This action is irreversible."""
+    galaxy_id = galaxy_id or await _get_galaxy_id()
+    if not galaxy_id:
+        return {"error": "No galaxy found"}
+    async with async_session() as db:
+        s = (await db.execute(select(Stardust).where(Stardust.id == stardust_id, Stardust.galaxy_id == galaxy_id))).scalar_one_or_none()
+        if not s:
+            return {"error": f"Stardust record '{stardust_id}' not found"}
+        from app.services import nebula_service
+        from app.models import (
+            EntityStardust as _ES, EntityTimeline as _ET,
+            StardustRelationship as _SR, EntityBacklink as _EB, RoutingLog as _RL,
+            KnowledgeIntegrationLog as _KIL,
+        )
+        await nebula_service.log_event(galaxy_id=galaxy_id, action_type="DELETE", initiated_by="mcp_client", record_id=stardust_id, db=db)
+        await db.execute(delete(_ES).where(_ES.stardust_id == stardust_id))
+        await db.execute(delete(_ET).where(_ET.source_stardust_id == stardust_id))
+        await db.execute(delete(_SR).where((_SR.source_stardust_id == stardust_id) | (_SR.target_stardust_id == stardust_id)))
+        await db.execute(delete(_EB).where(_EB.stardust_id == stardust_id))
+        await db.execute(delete(_RL).where(_RL.stardust_id == stardust_id))
+        await db.execute(delete(_KIL).where(_KIL.stardust_id == stardust_id))
+        await db.delete(s)
+        await db.commit()
+        return {"status": "deleted", "deleted_id": stardust_id}
 
 
 async def memory_entity_get(entity_name: str, planet: str | None = None, galaxy_id: str | None = None) -> dict:

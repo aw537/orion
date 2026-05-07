@@ -283,6 +283,68 @@ async def brain_synthesize(
     return await _session_wrap(await _resolve_agent(agent_name), "brain.synthesize", result.model_dump())
 
 
+@mcp.tool(name="brain.graph_full")
+async def brain_graph_full(
+    planet: str | None = None, max_nodes: int = 100, agent_name: str | None = None,
+) -> dict:
+    """Get the entity knowledge graph with all edges. Use planet to scope to one domain. max_nodes caps the result to avoid token explosion on large graphs."""
+    galaxy_id = await _get_galaxy_id()
+    if not galaxy_id:
+        return {"error": "No galaxy found"}
+    from app.services.graph_service import graph_service
+    async with async_session() as db:
+        from app.models import Planet as PlanetModel, Entity
+        from sqlalchemy import select as _select
+        q = _select(Entity).where(Entity.galaxy_id == galaxy_id)
+        if planet:
+            p = (await db.execute(_select(PlanetModel).where(PlanetModel.galaxy_id == galaxy_id, PlanetModel.name == planet))).scalar_one_or_none()
+            if p:
+                q = q.where(Entity.planet_id == p.id)
+        entities = (await db.execute(q.limit(max_nodes))).scalars().all()
+        planets = (await db.execute(_select(PlanetModel).where(PlanetModel.galaxy_id == galaxy_id))).scalars().all()
+        planet_map = {p.id: {"name": p.name, "color": p.color} for p in planets}
+        entity_list = []
+        for e in entities:
+            pi = planet_map.get(e.planet_id, {})
+            entity_list.append({"id": e.id, "name": e.name, "entity_type": e.entity_type, "tier": e.tier, "planet_name": pi.get("name"), "planet_color": pi.get("color", "#6B7280"), "mention_count": e.mention_count})
+        from app.models import EntityRelationship
+        edge_q = _select(EntityRelationship).where(EntityRelationship.galaxy_id == galaxy_id)
+        edges = (await db.execute(edge_q)).scalars().all()
+        entity_ids = {e["id"] for e in entity_list}
+        edge_list = [{"source": e.source_entity_id, "target": e.target_entity_id, "type": e.relationship_type, "confidence": e.confidence} for e in edges if e.source_entity_id in entity_ids and e.target_entity_id in entity_ids]
+        return {"entities": entity_list, "edges": edge_list, "planets": [{"id": p.id, "name": p.name, "color": p.color} for p in planets], "truncated": len(entities) == max_nodes}
+
+
+# ── planet / biome / stardust management ───────────────────────────────────
+
+@mcp.tool(name="planet.list")
+async def planet_list() -> dict:
+    """List all planets and their biomes in the Galaxy, including those not in the Sun's planet_registry. Use this to discover the full routing namespace before writing stardust."""
+    result = await tools_memory.planet_list()
+    return await _session_wrap(_DEFAULT_AGENT, "planet.list", result)
+
+
+@mcp.tool(name="biome.list")
+async def biome_list(planet: str | None = None) -> dict:
+    """List all biomes, optionally scoped to one planet. Use when you need to know valid biome names before writing stardust to a specific location."""
+    result = await tools_memory.biome_list(planet)
+    return await _session_wrap(_DEFAULT_AGENT, "biome.list", result)
+
+
+@mcp.tool(name="stardust.get")
+async def stardust_get(stardust_id: str) -> dict:
+    """Fetch a specific stardust record by ID. Use to verify what was written or retrieve a record before superseding it with brain.think."""
+    result = await tools_memory.stardust_get(stardust_id)
+    return await _session_wrap(_DEFAULT_AGENT, "stardust.get", result)
+
+
+@mcp.tool(name="stardust.delete")
+async def stardust_delete(stardust_id: str) -> dict:
+    """Permanently delete a stardust record by ID. Use to remove incorrect or test writes. Irreversible — use with care."""
+    result = await tools_memory.stardust_delete(stardust_id)
+    return await _session_wrap(_DEFAULT_AGENT, "stardust.delete", result)
+
+
 # ── sun.* namespace (3 tools) ──────────────────────────────────────────────
 
 @mcp.tool(name="sun.read")

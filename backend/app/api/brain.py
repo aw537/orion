@@ -174,3 +174,23 @@ async def entity_get(body: EntityGetRequest, user: User = Depends(get_current_us
 @router.get("/status")
 async def status(user: User = Depends(get_current_user), galaxy: Galaxy = Depends(get_galaxy_for_user)):
     return await tools_memory.memory_status(galaxy_id=galaxy.id)
+
+
+@router.get("/planets")
+async def planet_list(user: User = Depends(get_current_user), galaxy: Galaxy = Depends(get_galaxy_for_user)):
+    return await tools_memory.planet_list(galaxy_id=galaxy.id)
+
+
+@router.get("/biomes")
+async def biome_list(planet: str | None = None, user: User = Depends(get_current_user), galaxy: Galaxy = Depends(get_galaxy_for_user)):
+    return await tools_memory.biome_list(planet=planet, galaxy_id=galaxy.id)
+
+
+@router.get("/stardust/{stardust_id}")
+async def stardust_get(stardust_id: str, user: User = Depends(get_current_user), galaxy: Galaxy = Depends(get_galaxy_for_user)):
+    return await tools_memory.stardust_get(stardust_id, galaxy_id=galaxy.id)
+
+
+@router.delete("/stardust/{stardust_id}")
+async def stardust_delete(stardust_id: str, user: User = Depends(get_current_user), galaxy: Galaxy = Depends(get_galaxy_for_user)):
+    return await tools_memory.stardust_delete(stardust_id, galaxy_id=galaxy.id)
