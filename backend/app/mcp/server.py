@@ -40,8 +40,13 @@ async def _resolve_agent(agent_name: str | None) -> str:
     return _DEFAULT_AGENT
 
 
-async def _session_wrap(agent: str, tool_name: str, result: dict) -> dict:
-    """Wrap a tool result with session tracking. On brain.orient, prepend full context bundle."""
+async def _session_wrap(agent: str, tool_name: str, result: dict, verbose: bool = False) -> dict:
+    """Wrap a tool result with session tracking. On brain.orient, prepend session header.
+
+    Compact mode (default): injects only _session header; tool_result already contains all
+    orientation data (galaxy_identity, current_context, operating_protocol, knowledge_state).
+    Verbose mode: also injects raw _sun and _context blobs for full inspection.
+    """
     galaxy_id = await _get_galaxy_id()
     if not galaxy_id:
         return result
@@ -51,17 +56,26 @@ async def _session_wrap(agent: str, tool_name: str, result: dict) -> dict:
     if tracker.needs_context(agent):
         tracker.mark_context_injected(agent)
         if tool_name == "brain.orient":
-            context = await tools_memory.memory_context()
-            sun = await tools_sun.sun_read()
-            result = {
-                "_session": {
-                    "session_id": session.id,
-                    "message": "Session started. Sun and context auto-loaded below. Follow the agent_protocol.",
-                },
-                "_sun": sun,
-                "_context": context,
-                "tool_result": result,
-            }
+            if verbose:
+                context = await tools_memory.memory_context()
+                sun = await tools_sun.sun_read()
+                result = {
+                    "_session": {
+                        "session_id": session.id,
+                        "message": "Session started. Sun and context auto-loaded below. Follow the agent_protocol.",
+                    },
+                    "_sun": sun,
+                    "_context": context,
+                    "tool_result": result,
+                }
+            else:
+                result = {
+                    "_session": {
+                        "session_id": session.id,
+                        "message": "Session started.",
+                    },
+                    "tool_result": result,
+                }
             logger.info(f"Auto-injected context for session {session.id}")
 
     return result
@@ -134,10 +148,19 @@ async def brain_orient(
     agent_name: str, model: str, agent_type: str = "GENERAL",
     active_planet: str | None = None, active_biome: str | None = None,
     max_tokens: int | None = None, include_biome_stardust: bool = False,
+    verbose: bool = False,
 ) -> dict:
-    """Orient yourself in your Galaxy at the start of every session. REQUIRED: Call this once at session start. Returns your persistent identity, accumulated expertise, current context, synthesized knowledge state, and operating protocol. Set include_biome_stardust=true to also embed biome-scoped stardust in one call (eliminates a follow-up memory.context call)."""
+    """Orient yourself in your Galaxy at the start of every session. REQUIRED: Call this once at session start.
+
+    Returns your persistent identity, current context, synthesized knowledge state, and operating protocol.
+    The response includes session_id — pass it to subsequent calls to maintain session continuity.
+
+    Parameters:
+    - verbose: set True to also receive raw _sun and _context dumps (larger response, rarely needed)
+    - include_biome_stardust: set True to embed biome stardust in one call (eliminates a memory.context follow-up)
+    """
     result = await tools_brain.brain_orient(agent_name, model, agent_type, active_planet, active_biome, max_tokens, include_biome_stardust)
-    return await _session_wrap(agent_name, "brain.orient", result)
+    return await _session_wrap(agent_name, "brain.orient", result, verbose=verbose)
 
 
 @mcp.tool(name="brain.think")
@@ -170,19 +193,24 @@ async def brain_recall(
     context_window: str | None = None, include_reasoning: bool = False,
     include_graph_paths: bool = False, recency_weight: float = 0.3,
     limit: int = 5, session_id: str | None = None, agent_name: str | None = None,
+    mode: str = "semantic",
 ) -> dict:
-    """Access knowledge from your brain with graph-enhanced retrieval.
+    """Access knowledge from your brain. Use the mode parameter to express retrieval intent:
 
-    Use this when: you need raw records with graph context, or want to filter by cognitive mode.
-    Use memory.search instead when: you just need a fast semantic search with no graph expansion.
-    Use brain.ask instead when: you have a natural language question and want a synthesized answer.
-    Use brain.know instead when: you want synthesized understanding of a specific named concept.
+    - mode="semantic" (default): raw records ranked by semantic similarity + recency + confidence.
+      Best for: finding relevant knowledge chunks, filtering by cognitive_mode or biome.
+    - mode="ask": natural language Q&A — returns a cited answer backed by specific records.
+      Best for: "What decisions were made about auth?", "Who knows about Stripe?"
+    - mode="synthesize": prose narrative over a topic — one LLM pass, no citations.
+      Best for: summarising a broad topic, drafting a brief.
+    - mode="concept": synthesized profile of a named entity or concept.
+      Best for: "Tell me everything about FastAPI", "What is the MVP entity?"
 
     Parameters:
-    - cognitive_mode: filter by — one of 'contextual', 'strategic', 'analytical', 'creative'
-    - context_window: prepend to query for better semantic matching (e.g. current task description)
+    - cognitive_mode: filter by region — 'contextual', 'strategic', 'analytical', 'creative'
+    - context_window: prepend to query for better semantic matching
     """
-    result = await tools_brain.brain_recall(query, cognitive_mode, planet, biome, context_window, include_reasoning, include_graph_paths, recency_weight, limit, session_id)
+    result = await tools_brain.brain_recall(query, cognitive_mode, planet, biome, context_window, include_reasoning, include_graph_paths, recency_weight, limit, session_id, mode=mode)
     return await _session_wrap(await _resolve_agent(agent_name), "brain.recall", result)
 
 

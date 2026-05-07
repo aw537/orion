@@ -141,6 +141,51 @@ async def search(
             seen.add(rid)
             unique.append(r)
 
+    # Postgres fulltext fallback — triggered when Redis + Chroma both returned nothing.
+    # Splits query into tokens and matches any term against stardust content via ILIKE.
+    if not unique:
+        try:
+            from sqlalchemy import or_
+            sources_checked.append("postgres_fulltext")
+            terms = [t.strip() for t in query.split() if len(t.strip()) > 2]
+            async with async_session() as db:
+                q = select(Stardust).where(Stardust.galaxy_id == galaxy_id)
+                if planet_ids:
+                    q = q.where(Stardust.planet_id.in_(planet_ids))
+                if biome_id:
+                    q = q.where(Stardust.biome_id == biome_id)
+                if region:
+                    q = q.where(Stardust.region == region)
+                if terms:
+                    q = q.where(or_(*[Stardust.content.ilike(f"%{t}%") for t in terms]))
+                rows = (await db.execute(q.order_by(Stardust.confidence.desc()).limit(limit))).scalars().all()
+                for s in rows:
+                    all_records.append({
+                        "id": s.id,
+                        "content": s.content,
+                        "metadata": {
+                            "confidence": s.confidence,
+                            "region": s.region,
+                            "valid_from": s.valid_from.isoformat() if s.valid_from else "",
+                            "source_agent": s.source_agent,
+                            "access_count": s.access_count,
+                            "context_tags": s.context_tags,
+                        },
+                        "score": s.confidence,
+                        "region": s.region,
+                        "planet_id": s.planet_id,
+                    })
+            # Re-deduplicate with fallback results
+            seen2: set[str] = set()
+            unique = []
+            for r in all_records:
+                rid = r.get("id") or r.get("stardust_id", "")
+                if rid not in seen2:
+                    seen2.add(rid)
+                    unique.append(r)
+        except Exception as e:
+            logger.warning(f"Postgres fulltext fallback failed: {e}")
+
     # Build response records
     records = []
     async with async_session() as db:

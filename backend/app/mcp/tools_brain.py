@@ -144,12 +144,38 @@ async def brain_recall(
     context_window: str | None = None, include_reasoning: bool = False,
     include_graph_paths: bool = False, recency_weight: float = 0.3,
     limit: int = 5, session_id: str | None = None,
+    mode: str = "semantic",
     galaxy_id: str | None = None,
 ) -> dict:
-    """Access knowledge from your brain with graph-enhanced retrieval."""
+    """Access knowledge from your brain. mode routes to the right retrieval strategy."""
     galaxy_id = galaxy_id or await _get_galaxy_id()
     if not galaxy_id:
         return {"records": [], "retrieval_metadata": {"error": "No galaxy found"}}
+
+    if mode == "ask":
+        from app.services import brain_ask_service
+        async with async_session() as db:
+            result = await brain_ask_service.answer(
+                question=query, galaxy_id=galaxy_id,
+                planet_name=planet, depth=2, db=db,
+            )
+        return result.model_dump(mode="json")
+
+    if mode == "synthesize":
+        from app.services.synthesis_service import synthesis_service
+        from app.storage.redis_client import get_redis as _get_redis
+        redis = await _get_redis()
+        async with async_session() as db:
+            result = await synthesis_service.synthesize(
+                topic=query, galaxy_id=galaxy_id,
+                planet_id=None, biome_id=None,
+                include_open_questions=True, include_contradictions=True,
+                max_tokens=1000, db=db, redis=redis,
+            )
+        return result.model_dump(mode="json")
+
+    if mode == "concept":
+        return await brain_know(query, depth="detailed", galaxy_id=galaxy_id)
 
     from app.services import search_service
 
