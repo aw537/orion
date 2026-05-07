@@ -181,9 +181,9 @@ class TestCallerSuggestionStrategy:
             caller_planet="Engineering", caller_biome=None,
             filename=None, db=db,
         )
-        assert result.method == "caller_suggestion"
+        assert result.method == "caller_context"
         assert result.planet.name == "Engineering"
-        assert result.confidence == 0.5
+        assert result.confidence == 0.85
 
     @pytest.mark.asyncio
     async def test_caller_planet_with_biome(self, db, galaxy_with_planets):
@@ -194,7 +194,7 @@ class TestCallerSuggestionStrategy:
             caller_planet="Engineering", caller_biome="Backend",
             filename=None, db=db,
         )
-        assert result.method == "caller_suggestion"
+        assert result.method == "caller_context"
         assert result.biome is not None
         assert result.biome.name == "Backend"
 
@@ -349,7 +349,7 @@ class TestAssignIntegration:
             assert result.planet is not None
             assert result.method in (
                 "graphify_cluster", "entity_routing", "keyword_match",
-                "caller_suggestion", "inbox_fallback",
+                "caller_context", "inbox_fallback",
             )
 
     @pytest.mark.asyncio
@@ -369,14 +369,14 @@ class TestAssignIntegration:
 
     @pytest.mark.asyncio
     async def test_explicit_planet_still_works(self, db, galaxy_with_planets):
-        """Explicit planet with no better match uses caller_suggestion."""
+        """Explicit planet with no better match uses caller_context."""
         g = galaxy_with_planets
         engine = PlanetAssignmentEngine()
         result = await engine.assign(
             content="random gibberish xyzzy", galaxy_id=g["galaxy_id"],
             caller_planet="Personal", caller_biome=None, filename=None, db=db,
         )
-        assert result.method == "caller_suggestion"
+        assert result.method == "caller_context"
         assert result.planet.name == "Personal"
 
 
