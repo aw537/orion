@@ -1,9 +1,10 @@
 """Orion MCP Server — standalone, calls the Orion REST API.
 
-20 tools across 4 namespaces:
+28 tools across 5 namespaces:
   memory.* (5)  — knowledge management
-  brain.*  (11) — cognitive operations + graph
-  sun.*    (3)  — Galaxy steering
+  brain.*  (12) — cognitive operations + graph
+  sun.*    (6)  — Galaxy steering
+  management (4) — planet.list, biome.list, stardust.get, stardust.delete
   orion_session_end (1) — session lifecycle
 """
 import os
@@ -95,7 +96,7 @@ async def memory_entity_get(entity_name: str, planet: str | None = None) -> dict
     return await _wrap(_DEFAULT_AGENT, "memory.entity_get", r)
 
 
-# ── brain.* (10 tools) ──────────────────────────────────────────────
+# ── brain.* (12 tools) ──────────────────────────────────────────────
 
 @mcp.tool(name="brain.orient")
 async def brain_orient(agent_name: str, model: str, agent_type: str = "GENERAL",
