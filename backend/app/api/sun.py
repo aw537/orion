@@ -72,9 +72,19 @@ async def append_lesson(body: AppendLessonBody, galaxy: Galaxy = Depends(get_gal
 
 
 @router.get("/lessons")
-async def get_lessons(tags: str = Query(default="", description="Comma-separated tags to filter by"), limit: int = Query(default=50, le=200), galaxy: Galaxy = Depends(get_galaxy_for_user), db: AsyncSession = Depends(get_db)):
+async def get_lessons(tags: str = Query(default="", description="Comma-separated tags to filter by"), limit: int = Query(default=50, le=200), include_resolved: bool = Query(default=False), galaxy: Galaxy = Depends(get_galaxy_for_user), db: AsyncSession = Depends(get_db)):
     tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
-    return await sun_service.get_lessons(galaxy.id, tag_list, limit, db)
+    return await sun_service.get_lessons(galaxy.id, tag_list, limit, include_resolved, db)
+
+
+@router.post("/lessons/{lesson_id}/resolve")
+async def resolve_lesson(lesson_id: str, galaxy: Galaxy = Depends(get_galaxy_for_user), db: AsyncSession = Depends(get_db)):
+    try:
+        return await sun_service.resolve_lesson(galaxy.id, lesson_id, db)
+    except KeyError as e:
+        raise HTTPException(404, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @router.get("/{section_key}")

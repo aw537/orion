@@ -204,20 +204,98 @@ async def sun_update(section_key: str, content: dict, summary: str) -> dict:
     return await _wrap(_DEFAULT_AGENT, "sun.update", r)
 
 @mcp.tool(name="sun.working_context")
-async def sun_working_context(current_focus: str | None = None, add_blocker: str | None = None,
-                               add_decision: str | None = None, add_hot_biome: str | None = None) -> dict:
-    """Quick-update the working context scratchpad."""
-    r = await client.sun_working_context(current_focus, add_blocker, add_decision, add_hot_biome)
+async def sun_working_context(
+    current_focus: str | None = None,
+    add_blocker: str | None = None,
+    remove_blocker: str | None = None,
+    add_decision: str | None = None,
+    add_hot_biome: str | None = None,
+    remove_hot_biome: str | None = None,
+    clear_decisions: bool = False,
+) -> dict:
+    """Quick-update the working context scratchpad.
+
+    Operations (all optional, combine freely):
+    - current_focus (str): set what you're working on right now
+    - add_blocker / remove_blocker (str): manage the blockers list
+    - add_hot_biome / remove_hot_biome (str): manage frequently-accessed biomes
+    - add_decision (str): append a decision to recent_decisions
+    - clear_decisions (bool): wipe the recent_decisions list
+    """
+    r = await client.sun_working_context(
+        current_focus, add_blocker, remove_blocker, add_decision,
+        add_hot_biome, remove_hot_biome, clear_decisions,
+    )
     return await _wrap(_DEFAULT_AGENT, "sun.working_context", r)
 
 
 @mcp.tool(name="sun.lesson")
 async def sun_lesson(correction: str, context: str = "", tags: list[str] | None = None,
                      severity: str = "medium", agent_name: str | None = None) -> dict:
-    """Record a lesson learned — a correction or rule the agent should remember permanently."""
+    """Record a lesson learned — a correction or rule the agent should remember permanently.
+
+    Parameters:
+    - severity: one of 'low', 'medium' (default), 'high', 'critical'
+    - tags: list of topic tags for filtering (e.g. ['retrieval', 'routing'])
+    """
     resolved = _resolve_agent(agent_name)
     r = await client.sun_lesson(correction, context, tags, resolved, severity)
     return await _wrap(resolved, "sun.lesson", r)
+
+
+@mcp.tool(name="sun.lesson_list")
+async def sun_lesson_list(tags: list[str] | None = None, limit: int = 50,
+                           include_resolved: bool = False) -> dict:
+    """List lessons recorded in the Sun. Active lessons only by default.
+
+    Parameters:
+    - tags: filter to lessons matching any of these topic tags
+    - limit: max lessons to return (default 50)
+    - include_resolved: set True to also include resolved lessons
+    """
+    r = await client.sun_lesson_list(tags, limit, include_resolved)
+    return await _wrap(_DEFAULT_AGENT, "sun.lesson_list", r)
+
+
+@mcp.tool(name="sun.lesson_resolve")
+async def sun_lesson_resolve(lesson_id: str) -> dict:
+    """Mark a lesson as resolved so it no longer appears in active lists.
+
+    Parameters:
+    - lesson_id: the ID from sun.lesson_list (e.g. 'L001')
+    """
+    r = await client.sun_lesson_resolve(lesson_id)
+    return await _wrap(_DEFAULT_AGENT, "sun.lesson_resolve", r)
+
+
+# ── Planet / Biome / Stardust management ────────────────────────────────────
+
+@mcp.tool(name="planet.list")
+async def planet_list() -> dict:
+    """List all planets and their biomes in the Galaxy, including those not in the Sun's planet_registry. Use this to discover the full routing namespace before writing stardust."""
+    r = await client.planet_list()
+    return await _wrap(_DEFAULT_AGENT, "planet.list", r)
+
+
+@mcp.tool(name="biome.list")
+async def biome_list(planet: str | None = None) -> dict:
+    """List all biomes, optionally scoped to one planet. Use when you need to know valid biome names before writing stardust to a specific location."""
+    r = await client.biome_list(planet)
+    return await _wrap(_DEFAULT_AGENT, "biome.list", r)
+
+
+@mcp.tool(name="stardust.get")
+async def stardust_get(stardust_id: str) -> dict:
+    """Fetch a specific stardust record by ID. Use to verify what was written or retrieve a record before superseding it with brain.think."""
+    r = await client.stardust_get(stardust_id)
+    return await _wrap(_DEFAULT_AGENT, "stardust.get", r)
+
+
+@mcp.tool(name="stardust.delete")
+async def stardust_delete(stardust_id: str) -> dict:
+    """Permanently delete a stardust record by ID. Use to remove incorrect or test writes. Irreversible — use with care."""
+    r = await client.stardust_delete(stardust_id)
+    return await _wrap(_DEFAULT_AGENT, "stardust.delete", r)
 
 
 # ── Session management ───────────────────────────────────────────────

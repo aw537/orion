@@ -217,11 +217,40 @@ async def sun_lesson(correction: str, context: str = "", tags: list[str] | None 
     })
 
 
-async def sun_get_lessons(tags: list[str] | None = None, limit: int = 50):
-    params = f"?limit={limit}"
+async def sun_lesson_list(tags: list[str] | None = None, limit: int = 50, include_resolved: bool = False):
+    params: dict = {"limit": limit, "include_resolved": str(include_resolved).lower()}
     if tags:
-        params += f"&tags={','.join(tags)}"
-    return await _get(f"/api/v1/sun/lessons{params}")
+        params["tags"] = ",".join(tags)
+    lessons = await _get("/api/v1/sun/lessons", params)
+    if isinstance(lessons, list):
+        return {"lessons": lessons, "total": len(lessons)}
+    return lessons
+
+
+async def sun_lesson_resolve(lesson_id: str):
+    return await _post(f"/api/v1/sun/lessons/{lesson_id}/resolve")
+
+
+# ── Planet / Biome / Stardust management ───────────────────────────────────
+
+async def planet_list():
+    return await _get("/api/v1/brain/planets")
+
+async def biome_list(planet: str | None = None):
+    params = {"planet": planet} if planet else None
+    return await _get("/api/v1/brain/biomes", params)
+
+async def stardust_get(stardust_id: str):
+    return await _get(f"/api/v1/brain/stardust/{stardust_id}")
+
+async def stardust_delete(stardust_id: str):
+    try:
+        c = _get_client()
+        r = await c.delete(f"/api/v1/brain/stardust/{stardust_id}", headers=_headers())
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        return {"error": str(e)}
 
 
 # ── Nebula (session logging) ────────────────────────────────────────

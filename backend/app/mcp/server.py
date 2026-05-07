@@ -363,12 +363,67 @@ async def sun_update(section_key: str, content: dict, summary: str) -> dict:
 
 @mcp.tool(name="sun.working_context")
 async def sun_working_context(
-    current_focus: str | None = None, add_blocker: str | None = None,
-    add_decision: str | None = None, add_hot_biome: str | None = None,
+    current_focus: str | None = None,
+    add_blocker: str | None = None,
+    remove_blocker: str | None = None,
+    add_decision: str | None = None,
+    add_hot_biome: str | None = None,
+    remove_hot_biome: str | None = None,
+    clear_decisions: bool = False,
 ) -> dict:
-    """Quick-update the working context scratchpad."""
-    result = await tools_sun.sun_working_context(current_focus, add_blocker, add_decision, add_hot_biome)
+    """Quick-update the working context scratchpad.
+
+    Operations (all optional, combine freely):
+    - current_focus (str): set what you're working on right now
+    - add_blocker / remove_blocker (str): manage the blockers list
+    - add_hot_biome / remove_hot_biome (str): manage frequently-accessed biomes
+    - add_decision (str): append a decision to recent_decisions
+    - clear_decisions (bool): wipe the recent_decisions list
+    """
+    result = await tools_sun.sun_working_context(
+        current_focus, add_blocker, remove_blocker, add_decision,
+        add_hot_biome, remove_hot_biome, clear_decisions,
+    )
     return await _session_wrap(_DEFAULT_AGENT, "sun.working_context", result)
+
+
+@mcp.tool(name="sun.lesson")
+async def sun_lesson(correction: str, context: str = "", tags: list[str] | None = None,
+                     severity: str = "medium", agent_name: str | None = None) -> dict:
+    """Record a lesson learned — a correction or rule the agent should remember permanently.
+
+    Parameters:
+    - severity: 'low' · 'medium' (default) · 'high' · 'critical'
+    - tags: topic tags for filtering (e.g. ['retrieval', 'routing'])
+    """
+    resolved = await _resolve_agent(agent_name)
+    result = await tools_sun.sun_lesson(correction, context, tags or [], severity, resolved)
+    return await _session_wrap(resolved, "sun.lesson", result)
+
+
+@mcp.tool(name="sun.lesson_list")
+async def sun_lesson_list(tags: list[str] | None = None, limit: int = 50,
+                           include_resolved: bool = False) -> dict:
+    """List lessons recorded in the Sun.
+
+    Parameters:
+    - tags: filter to lessons matching any of these topic tags
+    - limit: max lessons to return (default 50)
+    - include_resolved: set True to also include resolved lessons
+    """
+    result = await tools_sun.sun_lesson_list(tags, limit, include_resolved)
+    return await _session_wrap(_DEFAULT_AGENT, "sun.lesson_list", result)
+
+
+@mcp.tool(name="sun.lesson_resolve")
+async def sun_lesson_resolve(lesson_id: str) -> dict:
+    """Mark a lesson as resolved so it no longer appears in active lists.
+
+    Parameters:
+    - lesson_id: the ID from sun.lesson_list (e.g. 'L001')
+    """
+    result = await tools_sun.sun_lesson_resolve(lesson_id)
+    return await _session_wrap(_DEFAULT_AGENT, "sun.lesson_resolve", result)
 
 
 # ── Session management ──────────────────────────────────────────────────────
