@@ -44,14 +44,19 @@ export default function BiomeGraph({ biomeId, onNodeClick }: Props) {
     }));
     const links = (graphData.edges || []).map((l: any) => ({
       ...l,
-      kind: l.type === 'contradiction' ? 'contra' : 'rel',
+      kind: l.type === 'contradiction' ? 'contra'
+          : l.type === 'co_chunk' ? 'co_chunk'
+          : l.type === 'wikilink' ? 'wikilink'
+          : 'rel',
     }));
 
     const stardustR = (d: any) => 8 + ((d.confidence || 0.5) - 0.5) * 24;
     const entitySize = (d: any) => 10 + ((d.tier || 1) - 1) * 4;
 
     const sim = d3.forceSimulation(nodes)
-      .force('link', d3.forceLink(links).id((d: any) => d.id).distance((l: any) => l.kind === 'contra' ? 110 : 70).strength((l: any) => l.kind === 'contra' ? 0.3 : 0.6))
+      .force('link', d3.forceLink(links).id((d: any) => d.id)
+        .distance((l: any) => l.kind === 'contra' ? 110 : l.kind === 'co_chunk' ? 50 : l.kind === 'wikilink' ? 90 : 70)
+        .strength((l: any) => l.kind === 'contra' ? 0.3 : l.kind === 'co_chunk' ? 0.7 : l.kind === 'wikilink' ? 0.4 : 0.6))
       .force('charge', d3.forceManyBody().strength(-220))
       .force('center', d3.forceCenter(W / 2, H / 2))
       .force('collide', d3.forceCollide((d: any) => d.kind === 'stardust' ? stardustR(d) + 6 : entitySize(d) + 14))
@@ -61,9 +66,16 @@ export default function BiomeGraph({ biomeId, onNodeClick }: Props) {
     const nodeG = svg.append('g');
 
     const link = linkG.selectAll('line').data(links).enter().append('line')
-      .attr('stroke', (d: any) => d.kind === 'contra' ? 'rgba(245, 158, 11, 0.55)' : 'rgba(196, 181, 253, 0.22)')
+      .attr('stroke', (d: any) =>
+        d.kind === 'contra'    ? 'rgba(245, 158, 11, 0.55)' :
+        d.kind === 'co_chunk'  ? 'rgba(148, 163, 184, 0.18)' :
+        d.kind === 'wikilink'  ? 'rgba(34, 211, 238, 0.45)' :
+                                 'rgba(196, 181, 253, 0.22)')
       .attr('stroke-width', (d: any) => d.kind === 'contra' ? 1.5 : 1)
-      .attr('stroke-dasharray', (d: any) => d.kind === 'contra' ? '5 4' : null);
+      .attr('stroke-dasharray', (d: any) =>
+        d.kind === 'contra'   ? '5 4' :
+        d.kind === 'co_chunk' ? '2 3' :
+        null);
 
     const node = nodeG.selectAll('g').data(nodes).enter().append('g')
       .attr('class', 'cursor-pointer')
