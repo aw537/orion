@@ -10,7 +10,7 @@ interface Planet {
   stardust_count: number;
   color?: string;
   planet_type?: string;
-  biomes?: { id: string; name: string; lifecycle_state: string; stardust_count: number }[];
+  active_biomes?: string[];
   health_status?: string;
 }
 interface GalaxyData {
@@ -96,7 +96,7 @@ export default React.memo(function GalaxyCanvas({ galaxy, onPlanetClick, onSunCl
       orbitR: n <= 1 ? minOrbit : Math.round(minOrbit + ((maxOrbit - minOrbit) * i) / (n - 1)),
       r: Math.max(16, Math.min(30, 14 + Math.sqrt(p.stardust_count) * 0.5)),
       color: colors[p.name.toLowerCase()] || p.color || theme.colors.planetDefault,
-      dust: p.stardust_count, biomes: p.biomes?.length || 0,
+      dust: p.stardust_count, biomes: p.active_biomes?.length || 0,
       _x: 0, _y: 0, planetType: p.planet_type,
     }));
     s.bridges = [];
