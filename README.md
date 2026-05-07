@@ -125,7 +125,7 @@ orion/
 
 | Tool | What it does |
 |------|-------------|
-| `memory.write` | Store knowledge. Auto-routes to the right Planet if not specified. |
+| `memory.write` | Store knowledge. `planet` is optional — the routing engine assigns it automatically. Receipt includes `planet_name`, `biome_name`, `routing_method`, and `routing_reasoning` so you can see where it landed and why. |
 | `memory.search` | Semantic search across your Galaxy. |
 | `memory.context` | Structured context bundle sized to a token budget. |
 | `memory.status` | Galaxy health, planets, biomes, strength score. |
@@ -135,14 +135,11 @@ orion/
 
 | Tool | What it does |
 |------|-------------|
-| `brain.orient` | Call at session start. Returns identity, context, knowledge state, protocol. Detects model switches. |
-| `brain.think` | Store understanding with auto-routing, contradiction detection, relationship extraction, expertise tracking. |
-| `brain.recall` | Graph-enhanced retrieval weighted by cognitive context. |
-| `brain.ask` | Natural language questions about your Galaxy's knowledge ("Who knows about auth?", "What decisions were made about the database?"). |
-| `brain.synthesize` | Synthesized understanding of a topic with confidence and open questions. |
+| `brain.orient` | Call at session start. Returns identity, context, knowledge state, and protocol. Detects model switches. Compact by default; pass `verbose=true` for full Sun and context blobs. |
+| `brain.think` | Store understanding with auto-routing, contradiction detection, relationship extraction, and expertise tracking. `planet` is optional — auto-routed if omitted. Receipt includes `planet_name`, `biome_name`, `routing_method`, and `routing_reasoning`. |
+| `brain.recall` | Retrieval with `mode` param: `semantic` (default, graph-enhanced), `ask` (natural language question), `synthesize` (topic synthesis with confidence + open questions), `concept` (entity profile + graph neighborhood). |
 | `brain.calibrate` | End-of-session feedback. Teaches the brain what was useful. |
 | `brain.health` | Cognitive health: freshness, coverage gaps, stale beliefs. |
-| `brain.know` | Quick concept lookup with graph neighborhood. |
 | `brain.graph_query` | Traverse the knowledge graph from an entity. |
 | `brain.find_path` | Shortest path between two concepts. |
 | `brain.graph_full` | Full knowledge graph — all entities and edges. |
@@ -410,6 +407,21 @@ When an agent reconnects with a different model, Orion detects the switch, asses
 
 Entities and relationships build automatically from every `brain.think`. The graph supports neighborhood traversal, path finding, hub detection, and transitive inference.
 
+### Auto-Routing
+
+Every write goes through a routing engine that decides which Planet and Biome it belongs in. You never have to specify a planet — the engine figures it out.
+
+**Routing priority (for writes):**
+
+1. **Caller context** — if an agent is operating in a Planet, writes default there (confidence 0.85). The engine only overrides at ≥0.90 confidence to a *different* Planet, meaning the content is unambiguously wrong for the current context. This keeps project knowledge in the project it was created in.
+2. **Graphify** — semantic cluster analysis on longer content and code files.
+3. **Entity routing** — existing entities in the knowledge graph vote for the Planet where they appear most.
+4. **Keyword match** — Planet name or description overlap in content.
+5. **Semantic neighbor** — embeds the content and finds the most similar existing stardust across all non-inbox Planets. Uploaded files use this to always land somewhere meaningful rather than accumulating in the inbox.
+6. **Inbox** — true last resort, for when the Galaxy is empty or content genuinely matches nothing.
+
+Every write receipt includes `routing_method` and `routing_reasoning` so agents can see what happened.
+
 ### Weekly Audit
 
 Runs automatically (Sunday 2 AM) or manually via `orion audit --run`:
@@ -431,10 +443,12 @@ Sends a weekly summary (Monday 8 AM) with activity metrics to users who have it 
 
 | Format | Detection | Behavior |
 |--------|-----------|----------|
-| **Obsidian** | `.obsidian/` directory | Parses `[[wikilinks]]` as entity relationships |
+| **Obsidian** | `.obsidian/` directory | Parses `[[wikilinks]]` as entity relationships. Top-level folders become Planets, subfolders become Biomes. |
 | **CLAUDE.md** | `CLAUDE.md` at root | Each rule → high-confidence Galaxy-gravity stardust |
 | **GBrain** | Frontmatter with `cognitive_mode` | Maps cognitive metadata to stardust fields |
 | **Plain** | Default | Markdown with YAML frontmatter, paragraph chunking |
+
+Files uploaded via the Inbox UI are parsed and routed automatically — each chunk goes to the Planet containing the most semantically similar existing content. Nothing is left in the inbox permanently.
 
 ---
 
