@@ -135,6 +135,16 @@ class PlanetAssignmentEngine:
         if a and a.confidence >= KEYWORD_MIN_CONFIDENCE:
             return a
 
+        # Last resort before inbox: find the most semantically similar existing stardust
+        # and route to its planet/biome. This ensures uploaded files always land somewhere
+        # meaningful rather than accumulating in the inbox.
+        try:
+            a = await self._strategy_semantic_neighbor(content, galaxy_id, planets, db)
+            if a:
+                return a
+        except Exception as e:
+            logger.warning(f"Semantic neighbor strategy failed: {e}")
+
         return None
 
     # ── Strategies ──
@@ -239,6 +249,60 @@ class PlanetAssignmentEngine:
         return PlanetAssignment(
             planet=best_planet, biome=None, confidence=round(best_score, 3), method="keyword_match",
             reasoning=best_reason,
+        )
+
+    async def _strategy_semantic_neighbor(
+        self, content: str, galaxy_id: str, planets: list[Planet], db: AsyncSession,
+    ) -> PlanetAssignment | None:
+        """Route to the planet/biome of the most semantically similar existing stardust.
+
+        Queries Chroma across all regions without a planet filter (one query per region),
+        then picks the top result that belongs to a non-inbox planet. This ensures content
+        always lands somewhere meaningful rather than accumulating in the inbox.
+        """
+        from app.storage.chroma_client import ChromaClient, get_chroma_client
+
+        non_inbox_ids = {p.id for p in planets if p.planet_type != "inbox" and p.name.lower() != "inbox"}
+        if not non_inbox_ids:
+            return None
+
+        try:
+            provider = get_embedding_provider()
+            embedding = await provider.embed(content, task_type="RETRIEVAL_QUERY")
+        except Exception:
+            return None
+
+        chroma = ChromaClient(get_chroma_client())
+        best_score = 0.0
+        best_planet_id: str | None = None
+        best_biome_id: str | None = None
+
+        # query_all_regions with planet_id=None searches across all planets per region
+        results = await chroma.query_all_regions(galaxy_id, planet_id=None, query_embedding=embedding, n_results=5)
+        for r in results:
+            pid = r.get("metadata", {}).get("planet_id")
+            if pid not in non_inbox_ids:
+                continue
+            score = 1.0 - r.get("distance", 1.0)
+            if score > best_score:
+                best_score = score
+                best_planet_id = pid
+                best_biome_id = r.get("metadata", {}).get("biome_id")
+
+        # Require at least weak similarity — pure noise shouldn't force a bad assignment
+        if best_score < 0.40 or not best_planet_id:
+            return None
+
+        best_planet = next((p for p in planets if p.id == best_planet_id), None)
+        if not best_planet:
+            return None
+
+        best_biome = await db.get(Biome, best_biome_id) if best_biome_id else None
+        return PlanetAssignment(
+            planet=best_planet, biome=best_biome,
+            confidence=round(best_score, 3),
+            method="semantic_neighbor",
+            reasoning=f"Nearest existing stardust is in Planet '{best_planet.name}' (similarity: {best_score:.2f})",
         )
 
     # ── Biome helpers ──
