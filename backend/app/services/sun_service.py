@@ -24,7 +24,7 @@ You can paste an existing CLAUDE.md, .cursorrules, or any markdown content here.
 DEFAULT_SUN = {
     "identity": {"name": "", "role": "", "primary_domain": "", "working_style": "", "timezone": "", "galaxy_purpose": ""},
     "values": {"principles": [], "communication_style": "direct", "contradiction_preference": "flag_and_ask", "citation_required": True},
-    "agent_protocol": {"write_rules": [], "read_rules": [], "uncertainty_handling": "Flag low-confidence results explicitly.", "session_start_instruction": "Call orion_context to load current project context.", "session_end_instruction": "Write any new decisions or learnings to the active Biome."},
+    "agent_protocol": {"write_rules": [], "read_rules": [], "uncertainty_handling": "Flag low-confidence results explicitly.", "session_start_instruction": "Call brain.orient to register your agent identity and load current Galaxy context. Required at the start of every session.", "session_end_instruction": "Use brain.think to persist new decisions and learnings before ending the session. Then call brain.calibrate to improve future retrieval."},
     "planet_registry": {"planets": []},
     "working_context": {"current_focus": "", "hot_biomes": [], "recent_decisions": [], "blockers": [], "updated_at": ""},
     "evolution_log": {"entries": []},

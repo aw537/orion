@@ -31,19 +31,20 @@ def _resolve_agent(agent_name: str | None) -> str:
 
 
 async def _wrap(agent: str, tool: str, result: dict) -> dict:
-    """Session tracking wrapper. On first call, prepend Sun + context."""
+    """Session tracking wrapper. On brain.orient first call, prepend full context bundle."""
     session = tracker.touch(agent, tool)
     if tracker.needs_context(agent):
         tracker.mark_context_injected(agent)
-        try:
-            ctx = await client.memory_context()
-            sun = await client.sun_read()
-            result = {
-                "_session": {"session_id": session.id, "message": "Session started. Sun and context auto-loaded."},
-                "_sun": sun, "_context": ctx, "tool_result": result,
-            }
-        except Exception as e:
-            logger.warning(f"Failed to auto-inject context: {e}")
+        if tool == "brain.orient":
+            try:
+                ctx = await client.memory_context()
+                sun = await client.sun_read()
+                result = {
+                    "_session": {"session_id": session.id, "message": "Session started. Sun and context auto-loaded."},
+                    "_sun": sun, "_context": ctx, "tool_result": result,
+                }
+            except Exception as e:
+                logger.warning(f"Failed to auto-inject context: {e}")
     return result
 
 
@@ -175,9 +176,18 @@ async def brain_synthesize(topic: str, planet: str | None = None, biome: str | N
 # ── sun.* (3 tools) ─────────────────────────────────────────────────
 
 @mcp.tool(name="brain.graph_full")
-async def brain_graph_full(agent_name: str | None = None) -> dict:
-    """Get the full knowledge graph — all entities with planet colors, all edges."""
+async def brain_graph_full(
+    planet: str | None = None, max_nodes: int = 100, agent_name: str | None = None,
+) -> dict:
+    """Get the entity knowledge graph with all edges. Use planet to scope to one domain. max_nodes caps the result to avoid token explosion on large graphs."""
     r = await client.graph_full()
+    if isinstance(r, dict) and "entities" in r and planet:
+        r["entities"] = [e for e in r["entities"] if e.get("planet_name") == planet]
+    if isinstance(r, dict) and "entities" in r and len(r["entities"]) > max_nodes:
+        entity_ids = {e["id"] for e in r["entities"][:max_nodes]}
+        r["entities"] = r["entities"][:max_nodes]
+        r["edges"] = [e for e in r.get("edges", []) if e.get("source") in entity_ids and e.get("target") in entity_ids]
+        r["truncated"] = True
     return await _wrap(_resolve_agent(agent_name), "brain.graph_full", r)
 
 

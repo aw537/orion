@@ -20,6 +20,18 @@ class AddBlockerBody(BaseModel):
     blocker: str
 
 
+class RemoveBlockerBody(BaseModel):
+    blocker: str
+
+
+class AddHotBiomeBody(BaseModel):
+    biome: str
+
+
+class RemoveHotBiomeBody(BaseModel):
+    biome: str
+
+
 class AddDecisionBody(BaseModel):
     decision: str
     biome: str = ""
@@ -105,3 +117,50 @@ async def add_decision(body: AddDecisionBody, galaxy: Galaxy = Depends(get_galax
     content["recent_decisions"] = decisions
     content["updated_at"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     return await sun_service.update_section(galaxy.id, "working_context", content, "user", f"Added decision: {body.decision[:50]}", db)
+
+
+@router.post("/working-context/add-hot-biome")
+async def add_hot_biome(body: AddHotBiomeBody, galaxy: Galaxy = Depends(get_galaxy_for_user), db: AsyncSession = Depends(get_db)):
+    section = await sun_service.get_section(galaxy.id, "working_context", db)
+    if not section:
+        raise HTTPException(404, "working_context section not found")
+    content = section["content"]
+    hot = content.get("hot_biomes", [])
+    if body.biome not in hot:
+        hot.append(body.biome)
+    content["hot_biomes"] = hot
+    content["updated_at"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+    return await sun_service.update_section(galaxy.id, "working_context", content, "agent", f"Added hot biome: {body.biome}", db)
+
+
+@router.post("/working-context/remove-blocker")
+async def remove_blocker(body: RemoveBlockerBody, galaxy: Galaxy = Depends(get_galaxy_for_user), db: AsyncSession = Depends(get_db)):
+    section = await sun_service.get_section(galaxy.id, "working_context", db)
+    if not section:
+        raise HTTPException(404, "working_context section not found")
+    content = section["content"]
+    content["blockers"] = [b for b in content.get("blockers", []) if b != body.blocker]
+    content["updated_at"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+    return await sun_service.update_section(galaxy.id, "working_context", content, "agent", f"Removed blocker: {body.blocker[:50]}", db)
+
+
+@router.post("/working-context/remove-hot-biome")
+async def remove_hot_biome(body: RemoveHotBiomeBody, galaxy: Galaxy = Depends(get_galaxy_for_user), db: AsyncSession = Depends(get_db)):
+    section = await sun_service.get_section(galaxy.id, "working_context", db)
+    if not section:
+        raise HTTPException(404, "working_context section not found")
+    content = section["content"]
+    content["hot_biomes"] = [b for b in content.get("hot_biomes", []) if b != body.biome]
+    content["updated_at"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+    return await sun_service.update_section(galaxy.id, "working_context", content, "agent", f"Removed hot biome: {body.biome}", db)
+
+
+@router.post("/working-context/clear-decisions")
+async def clear_decisions(galaxy: Galaxy = Depends(get_galaxy_for_user), db: AsyncSession = Depends(get_db)):
+    section = await sun_service.get_section(galaxy.id, "working_context", db)
+    if not section:
+        raise HTTPException(404, "working_context section not found")
+    content = section["content"]
+    content["recent_decisions"] = []
+    content["updated_at"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+    return await sun_service.update_section(galaxy.id, "working_context", content, "agent", "Cleared recent decisions", db)

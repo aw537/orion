@@ -184,17 +184,29 @@ async def sun_read(section=None):
 async def sun_update(section_key, content, summary):
     return await _put(f"/api/v1/sun/{section_key}", content)
 
-async def sun_working_context(current_focus=None, add_blocker=None, add_decision=None, add_hot_biome=None):
+async def sun_working_context(
+    current_focus=None, add_blocker=None, remove_blocker=None,
+    add_decision=None, add_hot_biome=None, remove_hot_biome=None,
+    clear_decisions=False,
+):
     results = {}
     if current_focus is not None:
         wc = await _get("/api/v1/sun/working_context")
         c = wc.get("content", {}) if isinstance(wc, dict) and "error" not in wc else {}
         c["current_focus"] = current_focus
-        results["focus"] = await _put("/api/v1/sun/working_context", c)
+        results["focus"] = await _put("/api/v1/sun/working_context", {"content": c, "changed_by": "agent", "summary": f"Set current focus: {str(current_focus)[:50]}"})
     if add_blocker:
         results["blocker"] = await _post("/api/v1/sun/working-context/add-blocker", {"blocker": add_blocker})
+    if remove_blocker:
+        results["remove_blocker"] = await _post("/api/v1/sun/working-context/remove-blocker", {"blocker": remove_blocker})
+    if add_hot_biome:
+        results["hot_biome"] = await _post("/api/v1/sun/working-context/add-hot-biome", {"biome": add_hot_biome})
+    if remove_hot_biome:
+        results["remove_hot_biome"] = await _post("/api/v1/sun/working-context/remove-hot-biome", {"biome": remove_hot_biome})
     if add_decision:
         results["decision"] = await _post("/api/v1/sun/working-context/add-decision", {"decision": add_decision})
+    if clear_decisions:
+        results["clear_decisions"] = await _post("/api/v1/sun/working-context/clear-decisions", {})
     return results or {"status": "no changes"}
 
 

@@ -41,7 +41,7 @@ async def _resolve_agent(agent_name: str | None) -> str:
 
 
 async def _session_wrap(agent: str, tool_name: str, result: dict) -> dict:
-    """Wrap a tool result with session tracking. On first call, prepend context."""
+    """Wrap a tool result with session tracking. On brain.orient, prepend full context bundle."""
     galaxy_id = await _get_galaxy_id()
     if not galaxy_id:
         return result
@@ -50,18 +50,19 @@ async def _session_wrap(agent: str, tool_name: str, result: dict) -> dict:
 
     if tracker.needs_context(agent):
         tracker.mark_context_injected(agent)
-        context = await tools_memory.memory_context()
-        sun = await tools_sun.sun_read()
-        result = {
-            "_session": {
-                "session_id": session.id,
-                "message": "Session started. Sun and context auto-loaded below. Follow the agent_protocol.",
-            },
-            "_sun": sun,
-            "_context": context,
-            "tool_result": result,
-        }
-        logger.info(f"Auto-injected context for session {session.id}")
+        if tool_name == "brain.orient":
+            context = await tools_memory.memory_context()
+            sun = await tools_sun.sun_read()
+            result = {
+                "_session": {
+                    "session_id": session.id,
+                    "message": "Session started. Sun and context auto-loaded below. Follow the agent_protocol.",
+                },
+                "_sun": sun,
+                "_context": context,
+                "tool_result": result,
+            }
+            logger.info(f"Auto-injected context for session {session.id}")
 
     return result
 
@@ -74,7 +75,15 @@ async def memory_write(
     region: str = "contextual", context_tags: list[str] | None = None,
     gravity: str = "BIOME",
 ) -> dict:
-    """Store a piece of knowledge in your Galaxy. Planet is auto-routed if not specified. For agents treating Orion as a cognitive substrate, use brain.think instead — it actively integrates knowledge rather than simply storing it."""
+    """Store a piece of knowledge in your Galaxy. Planet is auto-routed if not specified.
+
+    Use this when: storing facts without active integration (logs, references, raw notes).
+    Use brain.think instead when: the content should update your understanding, supersede a decision, or trigger contradiction detection.
+
+    Parameters:
+    - region: cognitive mode — one of: 'contextual' (default), 'strategic', 'analytical', 'creative'
+    - gravity: indexing scope — one of: 'BIOME' (default), 'PLANET', 'GALAXY'
+    """
     result = await tools_memory.memory_write(content, planet, biome, region, context_tags, gravity)
     return await _session_wrap(_DEFAULT_AGENT, "memory.write", result)
 
@@ -84,7 +93,12 @@ async def memory_search(
     query: str, planet: str | None = None, biome: str | None = None,
     region: str | None = None, limit: int = 5,
 ) -> dict:
-    """Search for relevant knowledge in your Galaxy. For agents with accumulated context, brain.recall provides graph-enhanced retrieval with cognitive mode awareness."""
+    """Search for relevant knowledge in your Galaxy using semantic search.
+
+    Use this when: doing simple keyword/semantic lookup with no graph expansion needed.
+    Use brain.recall instead when: you want records weighted by cognitive mode and graph-expanded context.
+    Use brain.ask instead when: you have a natural language question and want a synthesized answer.
+    """
     result = await tools_memory.memory_search(query, planet, biome, region, limit)
     return await _session_wrap(_DEFAULT_AGENT, "memory.search", result)
 
@@ -134,7 +148,17 @@ async def brain_think(
     scope: str = "BIOME", context_tags: list[str] | None = None,
     session_id: str | None = None, agent_name: str | None = None,
 ) -> dict:
-    """Integrate new understanding into your brain. Unlike memory.write, brain.think actively integrates: detects contradictions, processes supersession, extracts relationships, updates expertise."""
+    """Integrate new understanding into your brain — the primary write tool for AI agents.
+
+    Use this when: integrating decisions, learnings, or conclusions that should update your knowledge.
+    Use memory.write instead when: storing raw facts or notes without active integration.
+
+    Parameters:
+    - cognitive_mode: one of 'contextual' (default), 'strategic', 'analytical', 'creative'
+    - scope: indexing breadth — one of 'BIOME' (default, narrow), 'PLANET', 'GALAXY' (broadest)
+    - supersedes: list of stardust_ids this record replaces (marks them as outdated)
+    - reasoning: why you believe this — stored alongside the content for future calibration
+    """
     result = await tools_brain.brain_think(content, planet, biome, cognitive_mode, confidence, reasoning, supersedes, scope, context_tags, session_id, agent_name)
     return await _session_wrap(await _resolve_agent(agent_name), "brain.think", result)
 
@@ -147,7 +171,17 @@ async def brain_recall(
     include_graph_paths: bool = False, recency_weight: float = 0.3,
     limit: int = 5, session_id: str | None = None, agent_name: str | None = None,
 ) -> dict:
-    """Access knowledge from your brain with graph-enhanced retrieval. Unlike memory.search, brain.recall weights by cognitive context and expands through the knowledge graph."""
+    """Access knowledge from your brain with graph-enhanced retrieval.
+
+    Use this when: you need raw records with graph context, or want to filter by cognitive mode.
+    Use memory.search instead when: you just need a fast semantic search with no graph expansion.
+    Use brain.ask instead when: you have a natural language question and want a synthesized answer.
+    Use brain.know instead when: you want synthesized understanding of a specific named concept.
+
+    Parameters:
+    - cognitive_mode: filter by — one of 'contextual', 'strategic', 'analytical', 'creative'
+    - context_window: prepend to query for better semantic matching (e.g. current task description)
+    """
     result = await tools_brain.brain_recall(query, cognitive_mode, planet, biome, context_window, include_reasoning, include_graph_paths, recency_weight, limit, session_id)
     return await _session_wrap(await _resolve_agent(agent_name), "brain.recall", result)
 
@@ -175,7 +209,15 @@ async def brain_health(agent_name: str) -> dict:
 
 @mcp.tool(name="brain.know")
 async def brain_know(concept: str, depth: str = "summary", agent_name: str | None = None) -> dict:
-    """Access your synthesized understanding of a concept. Returns what this concept is, how it relates to what you know, how your understanding has evolved."""
+    """Access your synthesized understanding of a named concept or entity.
+
+    Use this when: you want to understand what a specific named thing is and how it relates to your knowledge.
+    Use brain.ask instead when: you have a natural language question rather than a named concept.
+    Use brain.recall instead when: you want raw records, not a synthesized understanding.
+
+    Parameters:
+    - depth: one of 'summary' (default, fast), 'detailed' (includes graph neighborhood), 'full_history' (all records)
+    """
     result = await tools_brain.brain_know(concept, depth)
     return await _session_wrap(await _resolve_agent(agent_name), "brain.know", result)
 

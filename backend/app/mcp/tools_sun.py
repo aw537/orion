@@ -31,10 +31,23 @@ async def sun_update(section_key: str, content: dict, summary: str) -> dict:
 
 
 async def sun_working_context(
-    current_focus: str | None = None, add_blocker: str | None = None,
-    add_decision: str | None = None, add_hot_biome: str | None = None,
+    current_focus: str | None = None,
+    add_blocker: str | None = None,
+    remove_blocker: str | None = None,
+    add_decision: str | None = None,
+    add_hot_biome: str | None = None,
+    remove_hot_biome: str | None = None,
+    clear_decisions: bool = False,
 ) -> dict:
-    """Quick-update the working context scratchpad."""
+    """Quick-update the working context scratchpad.
+
+    Operations:
+    - current_focus: set what you're working on right now
+    - add_blocker / remove_blocker: manage the blockers list
+    - add_hot_biome / remove_hot_biome: manage frequently-accessed biomes
+    - add_decision: append a decision to recent_decisions
+    - clear_decisions: wipe the recent_decisions list
+    """
     galaxy_id = await _get_galaxy_id()
     if not galaxy_id:
         return {"error": "No galaxy found"}

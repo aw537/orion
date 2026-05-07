@@ -1,6 +1,7 @@
-"""Brain namespace — eight cognitive tools for AI agents operating from Orion."""
+"""Brain namespace — cognitive tools for AI agents operating from Orion."""
 import json
 import logging
+from datetime import timezone
 from sqlalchemy import select
 from app.database import async_session
 from app.mcp.utils import get_galaxy_id as _get_galaxy_id
@@ -248,7 +249,7 @@ async def brain_health(agent_name: str, galaxy_id: str | None = None) -> dict:
             select(AgentIdentity).where(AgentIdentity.galaxy_id == galaxy_id, AgentIdentity.agent_name == agent_name)
         )).scalar_one_or_none()
         if not identity:
-            return {"error": f"Agent '{agent_name}' not found. Call brain.orient first."}
+            return {"error": f"Agent '{agent_name}' not found. Call brain.orient first.", "hint": "Use brain.orient to register your agent identity before calling brain.health."}
         result = await brain_health_service.get_brain_health(identity, galaxy_id, db)
         return result
 
