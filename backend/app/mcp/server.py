@@ -2,8 +2,8 @@
 
 Three namespaces:
   memory.* — 5 tools for knowledge management (any caller)
-  brain.*  — 8 tools for cognitive operations (AI agents)
-  sun.*    — 3 tools for Galaxy steering
+  brain.*  — 12 tools for cognitive operations (AI agents)
+  sun.*    — 6 tools for Galaxy steering
 
 Session lifecycle:
   1. First tool call from an agent auto-starts a session and injects Sun + context
@@ -127,7 +127,7 @@ async def memory_entity_get(entity_name: str, planet: str | None = None) -> dict
     return await _session_wrap(_DEFAULT_AGENT, "memory.entity_get", result)
 
 
-# ── brain.* namespace (8 tools) ────────────────────────────────────────────
+# ── brain.* namespace (12 tools) ───────────────────────────────────────────
 
 @mcp.tool(name="brain.orient")
 async def brain_orient(
@@ -260,9 +260,10 @@ async def brain_ask(
     question: str, planet: str | None = None, depth: int = 2,
     agent_name: str | None = None,
 ) -> dict:
-    """Ask a natural language question and get a synthesized answer from your Galaxy's knowledge.
+    """Ask a natural language question and get a cited answer from your Galaxy's knowledge.
 
-    Use this when: you have a question and want an interpreted, synthesized answer.
+    Use this when: you have a question and want a direct answer backed by specific records.
+    Use brain.synthesize instead when: you want a prose narrative over a topic, not a cited factual answer.
     Use brain.recall instead when: you want raw records and full control over retrieval.
     Use brain.know instead when: you have a specific named concept, not a question.
 
@@ -287,7 +288,7 @@ async def brain_synthesize(
     include_open_questions: bool = True, include_contradictions: bool = True,
     max_tokens: int = 1000, agent_name: str | None = None,
 ) -> dict:
-    """Get a synthesized understanding of a topic from your brain. Unlike brain.recall which returns individual records, brain.synthesize runs a single LLM pass over all relevant records and returns a coherent narrative."""
+    """Get a synthesized prose narrative about a topic from your brain. Unlike brain.ask which returns a cited factual answer, brain.synthesize runs a single LLM pass over all relevant records and returns a coherent narrative with no citations. Use when you want prose, not a factual answer."""
     galaxy_id = await _get_galaxy_id()
     if not galaxy_id:
         return {"error": "No galaxy found"}
@@ -367,7 +368,7 @@ async def stardust_delete(stardust_id: str) -> dict:
     return await _session_wrap(_DEFAULT_AGENT, "stardust.delete", result)
 
 
-# ── sun.* namespace (3 tools) ──────────────────────────────────────────────
+# ── sun.* namespace (6 tools) ──────────────────────────────────────────────
 
 @mcp.tool(name="sun.read")
 async def sun_read(section: str | None = None) -> dict:
@@ -398,7 +399,7 @@ async def sun_working_context(
     Operations (all optional, combine freely):
     - current_focus (str): set what you're working on right now
     - add_blocker / remove_blocker (str): manage the blockers list
-    - add_hot_biome / remove_hot_biome (str): manage frequently-accessed biomes
+    - add_hot_biome / remove_hot_biome (str): manage frequently-accessed biomes (surfaced in brain.orient orientation and used as retrieval hints)
     - add_decision (str): append a decision to recent_decisions
     - clear_decisions (bool): wipe the recent_decisions list
     """
@@ -424,13 +425,13 @@ async def sun_lesson(correction: str, context: str = "", tags: list[str] | None 
 
 
 @mcp.tool(name="sun.lesson_list")
-async def sun_lesson_list(tags: list[str] | None = None, limit: int = 50,
+async def sun_lesson_list(tags: list[str] | None = None, limit: int = 20,
                            include_resolved: bool = False) -> dict:
     """List lessons recorded in the Sun.
 
     Parameters:
     - tags: filter to lessons matching any of these topic tags
-    - limit: max lessons to return (default 50)
+    - limit: max lessons to return (default 20)
     - include_resolved: set True to also include resolved lessons
     """
     result = await tools_sun.sun_lesson_list(tags, limit, include_resolved)

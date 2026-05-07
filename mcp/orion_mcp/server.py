@@ -176,7 +176,7 @@ async def brain_diff(topic: str, since: str, planet: str | None = None,
 @mcp.tool(name="brain.ask")
 async def brain_ask(question: str, planet: str | None = None, depth: int = 2,
                      agent_name: str | None = None) -> dict:
-    """Ask a natural language question about your Galaxy's knowledge."""
+    """Ask a natural language question and get a cited answer from your Galaxy's knowledge. Routes to graph traversal or semantic search based on intent. Use brain.synthesize instead when you want a prose narrative with no citations."""
     r = await client.brain_ask(question, planet, depth)
     return await _wrap(_resolve_agent(agent_name), "brain.ask", r)
 
@@ -184,13 +184,11 @@ async def brain_ask(question: str, planet: str | None = None, depth: int = 2,
 async def brain_synthesize(topic: str, planet: str | None = None, biome: str | None = None,
                             include_open_questions: bool = True, include_contradictions: bool = True,
                             max_tokens: int = 1000, agent_name: str | None = None) -> dict:
-    """Get a synthesized understanding of a topic from your brain."""
+    """Get a synthesized prose narrative about a topic from your brain. Runs a single LLM pass over all relevant records and returns a coherent narrative with no citations. Use brain.ask instead when you want a cited factual answer."""
     r = await client.brain_synthesize(topic, planet, biome, include_open_questions,
                                        include_contradictions, max_tokens)
     return await _wrap(_resolve_agent(agent_name), "brain.synthesize", r)
 
-
-# ── sun.* (3 tools) ─────────────────────────────────────────────────
 
 @mcp.tool(name="brain.graph_full")
 async def brain_graph_full(
@@ -200,6 +198,8 @@ async def brain_graph_full(
     r = await client.graph_full(planet=planet, max_nodes=max_nodes)
     return await _wrap(_resolve_agent(agent_name), "brain.graph_full", r)
 
+
+# ── sun.* (6 tools) ─────────────────────────────────────────────────
 
 @mcp.tool(name="sun.read")
 async def sun_read(section: str | None = None) -> dict:
@@ -228,7 +228,7 @@ async def sun_working_context(
     Operations (all optional, combine freely):
     - current_focus (str): set what you're working on right now
     - add_blocker / remove_blocker (str): manage the blockers list
-    - add_hot_biome / remove_hot_biome (str): manage frequently-accessed biomes
+    - add_hot_biome / remove_hot_biome (str): manage frequently-accessed biomes (surfaced in brain.orient orientation and used as retrieval hints)
     - add_decision (str): append a decision to recent_decisions
     - clear_decisions (bool): wipe the recent_decisions list
     """
@@ -254,13 +254,13 @@ async def sun_lesson(correction: str, context: str = "", tags: list[str] | None 
 
 
 @mcp.tool(name="sun.lesson_list")
-async def sun_lesson_list(tags: list[str] | None = None, limit: int = 50,
+async def sun_lesson_list(tags: list[str] | None = None, limit: int = 20,
                            include_resolved: bool = False) -> dict:
     """List lessons recorded in the Sun. Active lessons only by default.
 
     Parameters:
     - tags: filter to lessons matching any of these topic tags
-    - limit: max lessons to return (default 50)
+    - limit: max lessons to return (default 20)
     - include_resolved: set True to also include resolved lessons
     """
     r = await client.sun_lesson_list(tags, limit, include_resolved)

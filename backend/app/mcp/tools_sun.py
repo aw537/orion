@@ -103,13 +103,13 @@ async def sun_lesson(
 
 
 async def sun_lesson_list(
-    tags: list[str] | None = None, limit: int = 50, include_resolved: bool = False,
+    tags: list[str] | None = None, limit: int = 20, include_resolved: bool = False,
 ) -> dict:
     """List lessons recorded in the Sun. Active lessons only by default.
 
     Parameters:
     - tags: filter to lessons matching any of these topic tags
-    - limit: max number of lessons to return (default 50)
+    - limit: max number of lessons to return (default 20)
     - include_resolved: set True to also return lessons already marked resolved
     """
     galaxy_id = await _get_galaxy_id()
