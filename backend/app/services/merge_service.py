@@ -53,6 +53,10 @@ class MergeService:
         proposal = await self._get_proposal(proposal_id, db)
         if proposal.status != "proposed":
             raise ValueError(f"Proposal is '{proposal.status}', not 'proposed'")
+        # Accepting user must belong to the target Galaxy (they are accepting on its behalf)
+        accepting_user = await db.get(User, accepted_by)
+        if not accepting_user or accepting_user.galaxy_id != proposal.target_galaxy_id:
+            raise ValueError("Only a member of the target Galaxy can accept a merge proposal")
         proposal.status = "accepted"
         proposal.accepted_by = accepted_by
         await db.commit()
@@ -225,7 +229,11 @@ class MergeService:
     # ── Gravity Bridge creation ─────────────────────────────────────
 
     async def create_bridges(self, proposal_id: str, db: AsyncSession) -> list[dict]:
-        """Create Gravity Bridges between all Planet pairs across the two Galaxies."""
+        """Create Gravity Bridges between semantically related Planet pairs across the two Galaxies.
+
+        Only bridges planets whose normalized names match — avoids creating N×M bridges
+        between unrelated planets.
+        """
         proposal = await self._get_proposal(proposal_id, db)
         if proposal.status not in ("entity_reconciliation", "bridging"):
             raise ValueError(f"Entity reconciliation must complete first, got '{proposal.status}'")
@@ -238,21 +246,31 @@ class MergeService:
             select(Planet).where(Planet.galaxy_id == proposal.target_galaxy_id)
         )).scalars().all()
 
+        # Index target planets by normalized name for O(n) matching
+        target_by_name: dict[str, Planet] = {p.name.lower().strip(): p for p in target_planets}
+
         bridges = []
         for sp in source_planets:
-            for tp in target_planets:
-                bridge = GravityBridge(
-                    id=str(uuid4()), galaxy_id=proposal.target_galaxy_id,
-                    source_planet_id=sp.id, target_planet_id=tp.id,
-                    bridge_type="MERGE", target_galaxy_id=proposal.source_galaxy_id,
-                    opened_by=proposal.proposed_by,
-                )
-                db.add(bridge)
-                bridges.append({
-                    "id": bridge.id, "source_planet": sp.name,
-                    "target_planet": tp.name, "bridge_type": "MERGE",
-                })
+            tp = target_by_name.get(sp.name.lower().strip())
+            if tp is None:
+                continue
+            bridge = GravityBridge(
+                id=str(uuid4()), galaxy_id=proposal.target_galaxy_id,
+                source_planet_id=sp.id, target_planet_id=tp.id,
+                bridge_type="MERGE", target_galaxy_id=proposal.source_galaxy_id,
+                opened_by=proposal.proposed_by,
+            )
+            db.add(bridge)
+            bridges.append({
+                "id": bridge.id, "source_planet": sp.name,
+                "target_planet": tp.name, "bridge_type": "MERGE",
+            })
 
+        logger.info(
+            f"Merge {proposal_id}: created {len(bridges)} bridges from "
+            f"{len(source_planets)} source × {len(target_planets)} target planets "
+            f"(name-matched only)"
+        )
         proposal.bridges_created = len(bridges)
         proposal.bridging_done = True
         await db.commit()
@@ -260,11 +278,16 @@ class MergeService:
 
     # ── Execute merge ───────────────────────────────────────────────
 
-    async def execute_merge(self, proposal_id: str, db: AsyncSession) -> dict:
+    async def execute_merge(self, proposal_id: str, executing_user_id: str, db: AsyncSession) -> dict:
         """Execute the full merge: apply Sun, merge entities, migrate data from source to target Galaxy."""
         proposal = await self._get_proposal(proposal_id, db)
         if proposal.status not in ("bridging", "accepted"):
             raise ValueError(f"Cannot execute merge in status '{proposal.status}'")
+
+        # Only a member of the target Galaxy may execute the merge
+        executing_user = await db.get(User, executing_user_id)
+        if not executing_user or executing_user.galaxy_id != proposal.target_galaxy_id:
+            raise ValueError("Only a member of the target Galaxy can execute a merge")
 
         target_gid = proposal.target_galaxy_id
         source_gid = proposal.source_galaxy_id
@@ -335,45 +358,60 @@ class MergeService:
                 m.merged = True
                 entities_merged += 1
 
-        # 4. Migrate remaining source data to target Galaxy
-        # Planets
-        await db.execute(
-            update(Planet).where(Planet.galaxy_id == source_gid).values(galaxy_id=target_gid)
-        )
-        # Biomes
-        await db.execute(
-            update(Biome).where(Biome.galaxy_id == source_gid).values(galaxy_id=target_gid)
-        )
-        # Stardust
-        await db.execute(
-            update(Stardust).where(Stardust.galaxy_id == source_gid).values(galaxy_id=target_gid)
-        )
-        # Unmatched entities
-        await db.execute(
-            update(Entity).where(Entity.galaxy_id == source_gid).values(galaxy_id=target_gid)
-        )
-        # Entity relationships
-        await db.execute(
-            update(EntityRelationship).where(EntityRelationship.galaxy_id == source_gid).values(galaxy_id=target_gid)
-        )
-        # Contradictions
-        await db.execute(
-            update(Contradiction).where(Contradiction.galaxy_id == source_gid).values(galaxy_id=target_gid)
-        )
-        # Users
-        await db.execute(
-            update(User).where(User.galaxy_id == source_gid).values(galaxy_id=target_gid)
-        )
-        # Gravity bridges (update source galaxy bridges to target)
-        await db.execute(
-            update(GravityBridge).where(GravityBridge.galaxy_id == source_gid).values(galaxy_id=target_gid)
-        )
-        # Clear target_galaxy_id on merge bridges (now all intra-galaxy)
-        await db.execute(
-            update(GravityBridge)
-            .where(GravityBridge.target_galaxy_id == source_gid)
-            .values(target_galaxy_id=None)
-        )
+        # 4. Migrate remaining source data to target Galaxy — wrapped in a savepoint
+        # so a mid-merge failure rolls back all bulk moves atomically.
+        try:
+            async with await db.begin_nested():
+                # Planets
+                await db.execute(
+                    update(Planet).where(Planet.galaxy_id == source_gid).values(galaxy_id=target_gid)
+                )
+                # Biomes
+                await db.execute(
+                    update(Biome).where(Biome.galaxy_id == source_gid).values(galaxy_id=target_gid)
+                )
+                # Stardust
+                await db.execute(
+                    update(Stardust).where(Stardust.galaxy_id == source_gid).values(galaxy_id=target_gid)
+                )
+                # Unmatched entities
+                await db.execute(
+                    update(Entity).where(Entity.galaxy_id == source_gid).values(galaxy_id=target_gid)
+                )
+                # Entity relationships
+                await db.execute(
+                    update(EntityRelationship).where(EntityRelationship.galaxy_id == source_gid).values(galaxy_id=target_gid)
+                )
+                # Contradictions
+                await db.execute(
+                    update(Contradiction).where(Contradiction.galaxy_id == source_gid).values(galaxy_id=target_gid)
+                )
+                # Users — log before migrating so there's a clear audit trail
+                migrating_users = (await db.execute(
+                    select(User.id, User.email, User.role).where(User.galaxy_id == source_gid)
+                )).all()
+                if migrating_users:
+                    logger.warning(
+                        f"Merge {proposal_id}: migrating {len(migrating_users)} user(s) from "
+                        f"Galaxy {source_gid} to {target_gid} without consent. "
+                        f"Users: {[(u.email, u.role) for u in migrating_users]}"
+                    )
+                await db.execute(
+                    update(User).where(User.galaxy_id == source_gid).values(galaxy_id=target_gid)
+                )
+                # Gravity bridges (update source galaxy bridges to target)
+                await db.execute(
+                    update(GravityBridge).where(GravityBridge.galaxy_id == source_gid).values(galaxy_id=target_gid)
+                )
+                # Clear target_galaxy_id on merge bridges (now all intra-galaxy)
+                await db.execute(
+                    update(GravityBridge)
+                    .where(GravityBridge.target_galaxy_id == source_gid)
+                    .values(target_galaxy_id=None)
+                )
+        except Exception as e:
+            logger.error(f"Merge {proposal_id}: migration failed mid-way, rolling back: {e}")
+            raise ValueError(f"Merge migration failed and was rolled back: {e}") from e
 
         # 5. Update target Galaxy totals
         target = await db.get(Galaxy, target_gid)
