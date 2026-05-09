@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   orion-postgres:
     image: postgres:16-alpine
@@ -10,7 +8,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U orion"]
       interval: 5s
@@ -25,10 +23,8 @@ services:
       - ./data:/app/data
       - ${OBSIDIAN_VAULT_PATH:-./data/vault}:/vault
       - ./content:/app/content
-      - ${HOME}:${HOME}:ro
     environment:
       - PYTHONPATH=/app
-      - HOST_HOME=${HOME}
       - DATABASE_URL=postgresql+asyncpg://orion:${POSTGRES_PASSWORD:-orion_dev}@orion-postgres:5432/orion
       - REDIS_URL=redis://orion-redis:6379
       - CHROMA_URL=http://orion-chroma:8000
@@ -39,7 +35,7 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ORION_LOCAL_TOKEN=${ORION_LOCAL_TOKEN:-}
-      - ORION_AUTH_DISABLED=true
+      - ORION_AUTH_DISABLED=${ORION_AUTH_DISABLED:-true}
     depends_on:
       orion-postgres:
         condition: service_healthy
@@ -63,7 +59,7 @@ services:
   orion-mcp:
     build: ./mcp
     ports:
-      - "8787:8787"
+      - "127.0.0.1:8787:8787"
     environment:
       - ORION_API_URL=http://orion-api:8000
       - ORION_TOKEN=${ORION_LOCAL_TOKEN:-}
@@ -106,7 +102,11 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
+    deploy:
+      resources:
+        limits:
+          memory: ${OLLAMA_MEMORY_LIMIT:-8g}
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 10s

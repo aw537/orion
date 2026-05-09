@@ -404,16 +404,15 @@ async def start_onboarding(body: OnboardingRequest, background_tasks: Background
 _IMPORT_MAX_FILES = 500
 _IMPORT_MAX_DEPTH = 5
 
-# Safe base directories for import/steering doc reads
+# Safe base directories for import/steering doc reads.
+# In Docker, set OBSIDIAN_VAULT_PATH so the vault is mounted at /vault.
+# Do NOT mount $HOME into the container — use /vault for all vault access.
 _SAFE_BASES = [
-    os.path.expanduser("~"),  # user home (container)
-    "/vault",                  # Docker-mounted vault
+    os.path.expanduser("~"),  # user home (container user, not host)
+    "/vault",                  # Docker-mounted vault (set OBSIDIAN_VAULT_PATH)
     "/tmp",                    # temp files
     "/app",                    # Docker working directory
 ]
-_host_home = os.environ.get("HOST_HOME", "")
-if _host_home:
-    _SAFE_BASES.append(_host_home)  # host home mounted at same path
 
 
 def _is_safe_path(resolved: str) -> bool:
@@ -423,8 +422,6 @@ def _is_safe_path(resolved: str) -> bool:
 
 def _validate_import_path(path: str) -> str:
     """Resolve and validate an import path. Rejects paths outside safe directories."""
-    if _host_home and path.startswith("~/"):
-        path = _host_home + path[1:]
     resolved = os.path.realpath(os.path.expanduser(path))
     if not os.path.isdir(resolved):
         raise HTTPException(400, f"Import path is not a directory: {path}")
@@ -437,8 +434,6 @@ def _read_steering_doc(path: str | None) -> str | None:
     """Read a markdown file from disk for the steering doc. Rejects paths outside safe directories."""
     if not path:
         return None
-    if _host_home and path.startswith("~/"):
-        path = _host_home + path[1:]
     resolved = os.path.realpath(os.path.expanduser(path))
     if not _is_safe_path(resolved):
         logger.warning(f"Steering doc path outside allowed directories: {resolved}")
