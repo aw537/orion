@@ -1,4 +1,5 @@
 """FastAPI dependencies for authentication."""
+import logging
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +9,8 @@ from app.database import get_db
 from app.models import Galaxy
 from app.models.user import User
 from app.auth.service import validate_token
+
+logger = logging.getLogger(__name__)
 
 
 async def get_current_user(
@@ -22,6 +25,10 @@ async def get_current_user(
 
     # Local dev bypass
     if getattr(settings, "ORION_AUTH_DISABLED", False):
+        logger.warning(
+            "ORION_AUTH_DISABLED=true — all requests are authenticated as the "
+            "owner user with no token verification. Do not use in production."
+        )
         # Return the first persisted user if one exists
         user = (await db.execute(select(User).limit(1))).scalar_one_or_none()
         if user:

@@ -1,3 +1,4 @@
+import hmac
 import logging
 import time
 from collections import defaultdict
@@ -12,15 +13,29 @@ from app.config import get_settings
 logging.basicConfig(level=logging.INFO, format="%(levelname)s [%(name)s] %(message)s")
 logger = logging.getLogger("orion")
 
-_AUTH_EXEMPT_PATHS = {"/health", "/docs", "/openapi.json", "/redoc", "/api/v1/auth/register", "/api/v1/auth/login"}
+# Paths exempt from the static bearer-token check (ORION_LOCAL_TOKEN).
+# login/register/logout/me must be reachable without the server-level token.
+_TOKEN_AUTH_EXEMPT_PATHS = {
+    "/health", "/docs", "/openapi.json", "/redoc",
+    "/api/v1/auth/register", "/api/v1/auth/login",
+    "/api/v1/auth/logout", "/api/v1/auth/me",
+}
+
+# Paths exempt from rate limiting (static assets / health only).
+# Login and register are intentionally NOT here so brute-force is limited.
+_RATE_LIMIT_EXEMPT_PATHS = {"/health", "/docs", "/openapi.json", "/redoc"}
 
 
 class TokenAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        # Allow CORS preflight through before any auth check
+        if request.method == "OPTIONS":
+            return await call_next(request)
         token = get_settings().ORION_LOCAL_TOKEN
-        if token and request.url.path not in _AUTH_EXEMPT_PATHS:
+        if token and request.url.path not in _TOKEN_AUTH_EXEMPT_PATHS:
             auth = request.headers.get("authorization", "")
-            if auth != f"Bearer {token}":
+            expected = f"Bearer {token}"
+            if not hmac.compare_digest(auth, expected):
                 return JSONResponse(status_code=401, content={"error": "Invalid or missing bearer token"})
         return await call_next(request)
 
@@ -37,12 +52,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if get_settings().ORION_AUTH_DISABLED:
             return await call_next(request)
-        if request.url.path in _AUTH_EXEMPT_PATHS:
+        if request.url.path in _RATE_LIMIT_EXEMPT_PATHS:
             return await call_next(request)
         client = request.client.host if request.client else "unknown"
         now = time.monotonic()
         window = self._hits[client]
-        # Prune old entries
         cutoff = now - self.WINDOW
         self._hits[client] = window = [t for t in window if t > cutoff]
         if len(window) >= self.MAX_REQUESTS:
@@ -131,7 +145,7 @@ async def value_error_handler(request: Request, exc: ValueError):
 @app.exception_handler(Exception)
 async def general_error_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled error: {exc}", exc_info=True)
-    return JSONResponse(status_code=500, content={"error": "Internal server error", "detail": str(exc)})
+    return JSONResponse(status_code=500, content={"error": "Internal server error"})
 
 
 @app.get("/health")
