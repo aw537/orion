@@ -87,7 +87,8 @@ class KnowledgeIntegrationEngine:
             adjacencies_flagged=result["adjacencies_flagged"],
             integration_duration_ms=duration_ms,
         ))
-        await db.commit()
+        # Flush only — caller owns the transaction boundary and must commit.
+        await db.flush()
 
         try:
             await nebula_service.log_event(

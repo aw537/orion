@@ -104,6 +104,7 @@ async def brain_think(
                         stardust = (await db2.execute(select(Stardust).where(Stardust.id == receipt.stardust_id))).scalar_one_or_none()
                         if stardust:
                             await integration_engine.integrate(stardust, galaxy_id, db2)
+                            await db2.commit()
                 except Exception as e:
                     logger.error(f"Knowledge integration failed: {e}")
             from app.mcp.background import spawn
