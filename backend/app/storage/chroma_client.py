@@ -83,6 +83,12 @@ class ChromaClient:
 
         return await asyncio.get_running_loop().run_in_executor(None, _query)
 
+    async def delete(self, galaxy_id: str, region: str, chroma_id: str):
+        col = await self._get_or_create_collection(galaxy_id, region)
+        def _delete():
+            col.delete(ids=[chroma_id])
+        await asyncio.get_running_loop().run_in_executor(None, _delete)
+
     async def query_all_regions(self, galaxy_id: str, planet_id: str | None,
                                 query_embedding: list[float], n_results: int = 10, where: dict | None = None) -> list[dict]:
         all_results = []
