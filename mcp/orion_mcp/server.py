@@ -7,6 +7,8 @@
   management (4) — planet.list, biome.list, stardust.get, stardust.delete
   orion_session_end (1) — session lifecycle
 """
+import asyncio
+import atexit
 import os
 import logging
 from mcp.server.fastmcp import FastMCP
@@ -18,6 +20,7 @@ logger = logging.getLogger("orion.mcp")
 
 MCP_PORT = int(os.environ.get("MCP_PORT", "8787"))
 mcp = FastMCP("Orion", host="0.0.0.0", port=MCP_PORT)
+
 
 _DEFAULT_AGENT = "mcp_client"
 
@@ -64,36 +67,39 @@ async def _wrap(agent: str, tool: str, result: dict, verbose: bool = False) -> d
 @mcp.tool(name="memory.write")
 async def memory_write(content: str, planet: str | None = None, biome: str | None = None,
                         region: str = "contextual", context_tags: list[str] | None = None,
-                        gravity: str = "BIOME") -> dict:
+                        gravity: str = "BIOME", agent_name: str | None = None) -> dict:
     """Store a piece of knowledge in your Galaxy. Planet is auto-routed if not specified."""
     r = await client.memory_write(content, planet, biome, region, context_tags, gravity)
-    return await _wrap(_DEFAULT_AGENT, "memory.write", r)
+    return await _wrap(_resolve_agent(agent_name), "memory.write", r)
 
 @mcp.tool(name="memory.search")
 async def memory_search(query: str, planet: str | None = None, biome: str | None = None,
-                         region: str | None = None, limit: int = 5) -> dict:
+                         region: str | None = None, limit: int = 5,
+                         agent_name: str | None = None) -> dict:
     """Search for relevant knowledge in your Galaxy."""
     r = await client.memory_search(query, planet, biome, region, limit)
-    return await _wrap(_DEFAULT_AGENT, "memory.search", r)
+    return await _wrap(_resolve_agent(agent_name), "memory.search", r)
 
 @mcp.tool(name="memory.context")
 async def memory_context(planet: str | None = None, biome: str | None = None,
-                          max_tokens: int = 4000, model: str | None = None) -> dict:
+                          max_tokens: int = 4000, model: str | None = None,
+                          agent_name: str | None = None) -> dict:
     """Get a structured context bundle for the current session."""
     r = await client.memory_context(planet, biome, max_tokens, model)
-    return await _wrap(_DEFAULT_AGENT, "memory.context", r)
+    return await _wrap(_resolve_agent(agent_name), "memory.context", r)
 
 @mcp.tool(name="memory.status")
-async def memory_status() -> dict:
+async def memory_status(agent_name: str | None = None) -> dict:
     """Get current Galaxy health and system state."""
     r = await client.memory_status()
-    return await _wrap(_DEFAULT_AGENT, "memory.status", r)
+    return await _wrap(_resolve_agent(agent_name), "memory.status", r)
 
 @mcp.tool(name="memory.entity_get")
-async def memory_entity_get(entity_name: str, planet: str | None = None) -> dict:
+async def memory_entity_get(entity_name: str, planet: str | None = None,
+                             agent_name: str | None = None) -> dict:
     """Retrieve an entity profile with relationship context and timeline."""
     r = await client.memory_entity_get(entity_name, planet)
-    return await _wrap(_DEFAULT_AGENT, "memory.entity_get", r)
+    return await _wrap(_resolve_agent(agent_name), "memory.entity_get", r)
 
 
 # ── brain.* (12 tools) ──────────────────────────────────────────────
@@ -242,16 +248,17 @@ async def brain_graph_full(
 # ── sun.* (6 tools) ─────────────────────────────────────────────────
 
 @mcp.tool(name="sun.read")
-async def sun_read(section: str | None = None) -> dict:
+async def sun_read(section: str | None = None, agent_name: str | None = None) -> dict:
     """Read the Galaxy's Sun — the steering document for all agents."""
     r = await client.sun_read(section)
-    return await _wrap(_DEFAULT_AGENT, "sun.read", r)
+    return await _wrap(_resolve_agent(agent_name), "sun.read", r)
 
 @mcp.tool(name="sun.update")
-async def sun_update(section_key: str, content: dict, summary: str) -> dict:
+async def sun_update(section_key: str, content: dict, summary: str,
+                     agent_name: str | None = None) -> dict:
     """Update a Sun section. Changes logged to evolution_log."""
     r = await client.sun_update(section_key, content, summary)
-    return await _wrap(_DEFAULT_AGENT, "sun.update", r)
+    return await _wrap(_resolve_agent(agent_name), "sun.update", r)
 
 @mcp.tool(name="sun.working_context")
 async def sun_working_context(
@@ -262,6 +269,7 @@ async def sun_working_context(
     add_hot_biome: str | None = None,
     remove_hot_biome: str | None = None,
     clear_decisions: bool = False,
+    agent_name: str | None = None,
 ) -> dict:
     """Quick-update the working context scratchpad.
 
@@ -276,7 +284,7 @@ async def sun_working_context(
         current_focus, add_blocker, remove_blocker, add_decision,
         add_hot_biome, remove_hot_biome, clear_decisions,
     )
-    return await _wrap(_DEFAULT_AGENT, "sun.working_context", r)
+    return await _wrap(_resolve_agent(agent_name), "sun.working_context", r)
 
 
 @mcp.tool(name="sun.lesson")
@@ -295,7 +303,8 @@ async def sun_lesson(correction: str, context: str = "", tags: list[str] | None 
 
 @mcp.tool(name="sun.lesson_list")
 async def sun_lesson_list(tags: list[str] | None = None, limit: int = 20,
-                           include_resolved: bool = False) -> dict:
+                           include_resolved: bool = False,
+                           agent_name: str | None = None) -> dict:
     """List lessons recorded in the Sun. Active lessons only by default.
 
     Parameters:
@@ -304,48 +313,51 @@ async def sun_lesson_list(tags: list[str] | None = None, limit: int = 20,
     - include_resolved: set True to also include resolved lessons
     """
     r = await client.sun_lesson_list(tags, limit, include_resolved)
-    return await _wrap(_DEFAULT_AGENT, "sun.lesson_list", r)
+    return await _wrap(_resolve_agent(agent_name), "sun.lesson_list", r)
 
 
 @mcp.tool(name="sun.lesson_resolve")
-async def sun_lesson_resolve(lesson_id: str) -> dict:
+async def sun_lesson_resolve(lesson_id: str, agent_name: str | None = None) -> dict:
     """Mark a lesson as resolved so it no longer appears in active lists.
 
     Parameters:
     - lesson_id: the ID from sun.lesson_list (e.g. 'L001')
     """
     r = await client.sun_lesson_resolve(lesson_id)
-    return await _wrap(_DEFAULT_AGENT, "sun.lesson_resolve", r)
+    return await _wrap(_resolve_agent(agent_name), "sun.lesson_resolve", r)
 
 
 # ── Planet / Biome / Stardust management ────────────────────────────────────
 
 @mcp.tool(name="planet.list")
-async def planet_list() -> dict:
+async def planet_list(agent_name: str | None = None) -> dict:
     """List all planets and their biomes in the Galaxy, including those not in the Sun's planet_registry. Use this to discover the full routing namespace before writing stardust."""
     r = await client.planet_list()
-    return await _wrap(_DEFAULT_AGENT, "planet.list", r)
+    return await _wrap(_resolve_agent(agent_name), "planet.list", r)
 
 
 @mcp.tool(name="biome.list")
-async def biome_list(planet: str | None = None) -> dict:
+async def biome_list(planet: str | None = None, agent_name: str | None = None) -> dict:
     """List all biomes, optionally scoped to one planet. Use when you need to know valid biome names before writing stardust to a specific location."""
     r = await client.biome_list(planet)
-    return await _wrap(_DEFAULT_AGENT, "biome.list", r)
+    return await _wrap(_resolve_agent(agent_name), "biome.list", r)
 
 
 @mcp.tool(name="stardust.get")
-async def stardust_get(stardust_id: str) -> dict:
+async def stardust_get(stardust_id: str, agent_name: str | None = None) -> dict:
     """Fetch a specific stardust record by ID. Use to verify what was written or retrieve a record before superseding it with brain.think."""
     r = await client.stardust_get(stardust_id)
-    return await _wrap(_DEFAULT_AGENT, "stardust.get", r)
+    return await _wrap(_resolve_agent(agent_name), "stardust.get", r)
 
 
 @mcp.tool(name="stardust.delete")
-async def stardust_delete(stardust_id: str) -> dict:
-    """Permanently delete a stardust record by ID. Use to remove incorrect or test writes. Irreversible — use with care."""
+async def stardust_delete(stardust_id: str, confirm: bool = False,
+                          agent_name: str | None = None) -> dict:
+    """Permanently delete a stardust record by ID. Irreversible — set confirm=True to proceed."""
+    if not confirm:
+        return {"error": "Set confirm=True to permanently delete this record. This action cannot be undone."}
     r = await client.stardust_delete(stardust_id)
-    return await _wrap(_DEFAULT_AGENT, "stardust.delete", r)
+    return await _wrap(_resolve_agent(agent_name), "stardust.delete", r)
 
 
 # ── Session management ───────────────────────────────────────────────
@@ -366,7 +378,19 @@ async def health_check(request):
     return JSONResponse({"status": "ok"})
 
 
+def _close_client_sync():
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            loop.create_task(client.close_client())
+        else:
+            loop.run_until_complete(client.close_client())
+    except Exception:
+        pass
+
+
 def main():
+    atexit.register(_close_client_sync)
     logger.info(f"Starting Orion MCP server on port {MCP_PORT}")
     logger.info(f"Backend API: {client.API_BASE}")
     mcp.run(transport="streamable-http")
