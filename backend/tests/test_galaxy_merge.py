@@ -204,7 +204,8 @@ class TestEntityReconciliation:
 
 class TestGravityBridgeCreation:
     @pytest.mark.asyncio
-    async def test_create_bridges(self, db, two_galaxies):
+    async def test_create_bridges_no_match(self, db, two_galaxies):
+        """Non-matching planet names produce no bridges (avoids N×M cartesian product)."""
         svc = MergeService()
         g = two_galaxies
         proposal = await svc.propose_merge(g["galaxy_a"].id, g["galaxy_b"].id, g["owner_a"].id, db)
@@ -212,12 +213,29 @@ class TestGravityBridgeCreation:
         await svc.negotiate_sun(proposal.id, db)
         await svc.reconcile_entities(proposal.id, db)
         bridges = await svc.create_bridges(proposal.id, db)
+        # "Engineering" ≠ "Research" → no bridge created
+        assert len(bridges) == 0
 
-        # 1 source planet × 1 target planet = 1 bridge
+    @pytest.mark.asyncio
+    async def test_create_bridges_matching_names(self, db, two_galaxies):
+        """Planets with the same name get a bridge."""
+        from app.models import Planet
+        g = two_galaxies
+        # Add a planet with a matching name to galaxy_b
+        matching = Planet(id=str(__import__("uuid").uuid4()), galaxy_id=g["galaxy_b"].id, name="Engineering", stardust_count=0)
+        db.add(matching)
+        await db.flush()
+
+        svc = MergeService()
+        proposal = await svc.propose_merge(g["galaxy_a"].id, g["galaxy_b"].id, g["owner_a"].id, db)
+        await svc.accept_merge(proposal.id, g["owner_b"].id, db)
+        await svc.negotiate_sun(proposal.id, db)
+        await svc.reconcile_entities(proposal.id, db)
+        bridges = await svc.create_bridges(proposal.id, db)
         assert len(bridges) == 1
         assert bridges[0]["bridge_type"] == "MERGE"
         assert bridges[0]["source_planet"] == "Engineering"
-        assert bridges[0]["target_planet"] == "Research"
+        assert bridges[0]["target_planet"] == "Engineering"
 
 
 class TestFullMergeExecution:
@@ -230,11 +248,11 @@ class TestFullMergeExecution:
         await svc.negotiate_sun(proposal.id, db)
         await svc.reconcile_entities(proposal.id, db)
         await svc.create_bridges(proposal.id, db)
-        result = await svc.execute_merge(proposal.id, db)
+        result = await svc.execute_merge(proposal.id, g["owner_b"].id, db)
 
         assert result["status"] == "complete"
         assert result["entities_merged"] == 1
-        assert result["bridges_created"] == 1
+        assert result["bridges_created"] == 0  # "Engineering" ≠ "Research" → no name-matched bridges
         assert result["sun_negotiated"] is True
 
         # Verify source data migrated to target galaxy
@@ -276,7 +294,7 @@ class TestFullMergeExecution:
         await svc.negotiate_sun(proposal.id, db)
         await svc.reconcile_entities(proposal.id, db)
         await svc.create_bridges(proposal.id, db)
-        result = await svc.execute_merge(proposal.id, db)
+        result = await svc.execute_merge(proposal.id, g["owner_b"].id, db)
         assert result["status"] == "complete"
         assert result["sun_negotiated"] is True
 
@@ -290,7 +308,7 @@ class TestFullMergeExecution:
         await svc.negotiate_sun(proposal.id, db)
         await svc.reconcile_entities(proposal.id, db)
         await svc.create_bridges(proposal.id, db)
-        await svc.execute_merge(proposal.id, db)
+        await svc.execute_merge(proposal.id, g["owner_b"].id, db)
 
         from sqlalchemy import select
         bridges = (await db.execute(

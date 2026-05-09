@@ -110,5 +110,5 @@ async def execute_merge(
 ):
     if user.role not in ("owner", "admin"):
         raise HTTPException(403, "Only owner/admin can execute merges")
-    result = await merge_service.execute_merge(proposal_id, db)
+    result = await merge_service.execute_merge(proposal_id, user.id, db)
     return result
