@@ -11,12 +11,22 @@ logger = logging.getLogger("orion.mcp.session")
 IDLE_TIMEOUT = 300  # 5 minutes
 
 
+def _create_task(coro) -> None:
+    """Schedule a coroutine as a background task, safe to call from sync code."""
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(coro)
+    except RuntimeError:
+        pass  # no running event loop — skip background logging
+
+
 @dataclass
 class Session:
     id: str
     agent: str
     started_at: datetime
     last_active: datetime
+    galaxy_id: str = ""
     reads: int = 0
     writes: int = 0
     context_injected: bool = False
@@ -25,17 +35,22 @@ class Session:
 
 class SessionTracker:
     def __init__(self):
-        self._sessions: dict[str, Session] = {}
+        self._sessions: dict[str, Session] = {}  # keyed by session.id
         self._cleanup_task: asyncio.Task | None = None
+
+    def _find_by_agent(self, agent: str) -> Session | None:
+        """Return the most recently active session for an agent, if any."""
+        matches = [s for s in self._sessions.values() if s.agent == agent]
+        return max(matches, key=lambda s: s.last_active) if matches else None
 
     def touch(self, agent: str, tool_name: str) -> Session:
         now = datetime.now(timezone.utc)
-        session = self._sessions.get(agent)
+        session = self._find_by_agent(agent)
         if not session:
             session = Session(id=str(uuid.uuid4()), agent=agent, started_at=now, last_active=now)
-            self._sessions[agent] = session
+            self._sessions[session.id] = session
             logger.info(f"Session started: {session.id} agent={agent}")
-            asyncio.ensure_future(self._log_start(session))
+            _create_task(self._log_start(session))
         session.last_active = now
         session.tools_called.append(tool_name)
         if tool_name in _READ_TOOLS:
@@ -44,23 +59,32 @@ class SessionTracker:
             session.writes += 1
         # Start idle cleanup loop
         if self._cleanup_task is None or self._cleanup_task.done():
-            self._cleanup_task = asyncio.ensure_future(self._idle_loop())
+            try:
+                self._cleanup_task = asyncio.get_running_loop().create_task(self._idle_loop())
+            except RuntimeError:
+                pass
         return session
 
+    def set_galaxy_id(self, session_id: str, galaxy_id: str) -> None:
+        if session_id in self._sessions:
+            self._sessions[session_id].galaxy_id = galaxy_id
+
     def needs_context(self, agent: str) -> bool:
-        s = self._sessions.get(agent)
+        s = self._find_by_agent(agent)
         return s is not None and not s.context_injected
 
     def mark_context_injected(self, agent: str):
-        if agent in self._sessions:
-            self._sessions[agent].context_injected = True
+        s = self._find_by_agent(agent)
+        if s:
+            s.context_injected = True
 
     def end_session(self, agent: str) -> dict | None:
-        session = self._sessions.pop(agent, None)
-        if not session:
+        s = self._find_by_agent(agent)
+        if not s:
             return None
-        stats = self._stats(session)
-        asyncio.ensure_future(self._log_end(session, "Agent ended session."))
+        self._sessions.pop(s.id, None)
+        stats = self._stats(s)
+        _create_task(self._log_end(s, "Agent ended session."))
         return stats
 
     def _stats(self, session: Session) -> dict:
@@ -76,19 +100,21 @@ class SessionTracker:
             await asyncio.sleep(60)
             now = datetime.now(timezone.utc)
             expired = [
-                key for key, s in self._sessions.items()
+                sid for sid, s in self._sessions.items()
                 if (now - s.last_active).total_seconds() > IDLE_TIMEOUT
             ]
-            for key in expired:
-                session = self._sessions.pop(key)
+            for sid in expired:
+                session = self._sessions.pop(sid)
                 logger.info(f"Session idle-expired: {session.id} agent={session.agent}")
                 await self._log_end(session, f"Idle-expired after {IDLE_TIMEOUT}s.")
 
     async def _log_start(self, session: Session):
         try:
             from orion_mcp import client
+            galaxy_id = session.galaxy_id or await client.resolve_galaxy_id()
+            self.set_galaxy_id(session.id, galaxy_id)
             await client.log_nebula_event(
-                galaxy_id="", action_type="SESSION_START",
+                galaxy_id=galaxy_id, action_type="SESSION_START",
                 initiated_by=session.agent, session_id=session.id,
             )
         except Exception as e:
@@ -97,9 +123,10 @@ class SessionTracker:
     async def _log_end(self, session: Session, summary: str):
         try:
             from orion_mcp import client
+            galaxy_id = session.galaxy_id or await client.resolve_galaxy_id()
             stats = self._stats(session)
             await client.log_nebula_event(
-                galaxy_id="", action_type="SESSION_END",
+                galaxy_id=galaxy_id, action_type="SESSION_END",
                 initiated_by=session.agent, session_id=session.id,
                 payload=json.dumps({
                     "reads": stats["reads"], "writes": stats["writes"],
