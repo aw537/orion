@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useStardust } from '../api/stardust';
 import { apiClient } from '../api/client';
 import { useQueryClient } from '@tanstack/react-query';
@@ -80,8 +80,8 @@ function StardustDetailPage({ stardustId }: { stardustId: string }) {
         </div>
 
         {/* Content */}
-        <section className="relative p-5 rounded-xl border border-[var(--border-soft)] bg-[rgba(255,255,255,0.025)] mb-4">
-          <div className="absolute top-4 right-4 flex gap-1.5 items-center z-[2]">
+        <section className="p-5 rounded-xl border border-[var(--border-soft)] bg-[rgba(255,255,255,0.025)] mb-4">
+          <div className="flex justify-end gap-1.5 items-center mb-2">
             {editing && <div className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] shadow-[0_0_6px_#F59E0B]" />}
             <button
               onClick={() => setEditing(!editing)}
@@ -100,7 +100,7 @@ function StardustDetailPage({ stardustId }: { stardustId: string }) {
             value={content}
             onChange={(e) => setContent(e.target.value)}
             readOnly={!editing}
-            className={`w-full min-h-[160px] font-body text-sm leading-[1.7] text-[var(--text-1)] bg-transparent border rounded-md p-1.5 -m-1.5 resize-none outline-none transition-all duration-150 ${
+            className={`w-full min-h-[160px] font-body text-sm leading-[1.7] text-[var(--text-1)] bg-transparent border rounded-md p-1.5 resize-none outline-none transition-all duration-150 ${
               editing ? 'border-[rgba(245,158,11,0.4)] bg-[rgba(245,158,11,0.05)]' : 'border-transparent'
             }`}
           />
