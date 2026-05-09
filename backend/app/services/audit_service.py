@@ -28,49 +28,68 @@ class AuditResults:
         self.failures: list[str] = []
 
 
+def _dedup_score(r: "Stardust") -> float:
+    return r.confidence * 0.7 + min(r.access_count / 100, 1.0) * 0.3
+
+
 async def _dedup(galaxy_id: str, results: AuditResults):
     """Find stardust pairs with cosine similarity > 0.95, merge duplicates."""
     try:
         chroma = ChromaClient(get_chroma_client())
         provider = get_embedding_provider()
         async with async_session() as db:
-            records = (await db.execute(select(Stardust).where(Stardust.galaxy_id == galaxy_id).limit(500))).scalars().all()
-            results.records_reviewed += len(records)
-            # Batch embed all records upfront
-            texts = [rec.content for rec in records if rec.chroma_id]
-            rec_with_chroma = [rec for rec in records if rec.chroma_id]
-            embeddings = await provider.embed_batch(texts, task_type="RETRIEVAL_QUERY") if texts else []
-            embedding_map = {rec.id: emb for rec, emb in zip(rec_with_chroma, embeddings)}
-            seen_merged = set()
-            for rec in records:
-                if rec.id in seen_merged or rec.id not in embedding_map:
-                    continue
-                embedding = embedding_map[rec.id]
-                similar = await chroma.query(galaxy_id, rec.planet_id, rec.region, embedding, n_results=5)
-                if not similar or not similar["ids"] or not similar["ids"][0]:
-                    continue
-                for i, sid in enumerate(similar["ids"][0]):
-                    if sid == rec.id or sid in seen_merged:
+            PAGE_SIZE = 500
+            last_id = ""
+            seen_merged: set[str] = set()
+            while True:
+                records = (await db.execute(
+                    select(Stardust).where(
+                        Stardust.galaxy_id == galaxy_id,
+                        Stardust.valid_until.is_(None),
+                        Stardust.id > last_id,
+                    ).order_by(Stardust.id).limit(PAGE_SIZE)
+                )).scalars().all()
+                if not records:
+                    break
+                results.records_reviewed += len(records)
+                last_id = records[-1].id
+
+                texts = [rec.content for rec in records if rec.chroma_id]
+                rec_with_chroma = [rec for rec in records if rec.chroma_id]
+                embeddings = await provider.embed_batch(texts, task_type="RETRIEVAL_QUERY") if texts else []
+                embedding_map = {rec.id: emb for rec, emb in zip(rec_with_chroma, embeddings)}
+
+                for rec in records:
+                    if rec.id in seen_merged or rec.id not in embedding_map:
                         continue
-                    dist = similar["distances"][0][i] if similar["distances"] else 1.0
-                    if dist < 0.05:  # cosine distance < 0.05 ≈ similarity > 0.95
-                        dup = (await db.execute(select(Stardust).where(Stardust.id == sid))).scalar_one_or_none()
-                        if not dup:
+                    embedding = embedding_map[rec.id]
+                    similar = await chroma.query(galaxy_id, rec.planet_id, rec.region, embedding, n_results=5)
+                    if not similar or not similar["ids"] or not similar["ids"][0]:
+                        continue
+                    for i, sid in enumerate(similar["ids"][0]):
+                        if sid == rec.id or sid in seen_merged:
                             continue
-                        # Keep higher confidence + more access_count
-                        keep, remove = (rec, dup) if (rec.confidence + rec.access_count) >= (dup.confidence + dup.access_count) else (dup, rec)
-                        # Merge tags
-                        keep_tags = set(json.loads(keep.context_tags) if isinstance(keep.context_tags, str) else keep.context_tags)
-                        remove_tags = set(json.loads(remove.context_tags) if isinstance(remove.context_tags, str) else remove.context_tags)
-                        merged_tags = list(keep_tags | remove_tags)
-                        await db.execute(update(Stardust).where(Stardust.id == keep.id).values(
-                            context_tags=merged_tags,
-                            access_count=keep.access_count + remove.access_count,
-                        ))
-                        await db.execute(update(Stardust).where(Stardust.id == remove.id).values(valid_until=datetime.now(timezone.utc).replace(tzinfo=None)))
-                        seen_merged.add(remove.id)
-                        results.duplicates_merged += 1
-                        await nebula_service.log_event(galaxy_id=galaxy_id, action_type="PROMOTE", initiated_by="audit_ai", record_id=keep.id, db=db)
+                        dist = similar["distances"][0][i] if similar["distances"] else 1.0
+                        if dist < 0.05:  # cosine distance < 0.05 ≈ similarity > 0.95
+                            dup = (await db.execute(select(Stardust).where(Stardust.id == sid))).scalar_one_or_none()
+                            if not dup or dup.valid_until is not None:  # skip already soft-deleted
+                                continue
+                            keep, remove = (rec, dup) if _dedup_score(rec) >= _dedup_score(dup) else (dup, rec)
+                            keep_tags = set(json.loads(keep.context_tags) if isinstance(keep.context_tags, str) else keep.context_tags)
+                            remove_tags = set(json.loads(remove.context_tags) if isinstance(remove.context_tags, str) else remove.context_tags)
+                            merged_tags = list(keep_tags | remove_tags)
+                            await db.execute(update(Stardust).where(Stardust.id == keep.id).values(
+                                context_tags=merged_tags,
+                                access_count=keep.access_count + remove.access_count,
+                            ))
+                            await db.execute(update(Stardust).where(Stardust.id == remove.id).values(
+                                valid_until=datetime.now(timezone.utc).replace(tzinfo=None)
+                            ))
+                            if remove.chroma_id:
+                                await chroma.delete(galaxy_id, remove.region, remove.chroma_id)
+                            seen_merged.add(remove.id)
+                            results.duplicates_merged += 1
+                            await nebula_service.log_event(galaxy_id=galaxy_id, action_type="PROMOTE", initiated_by="audit_ai", record_id=keep.id, db=db)
             await db.commit()
     except Exception as e:
         logger.error(f"Dedup failed: {e}")
@@ -83,52 +102,71 @@ async def _detect_contradictions(galaxy_id: str, results: AuditResults):
         provider = get_embedding_provider()
         negation_words = {"not", "never", "no", "don't", "doesn't", "isn't", "wasn't", "shouldn't", "can't", "won't"}
         async with async_session() as db:
-            records = (await db.execute(select(Stardust).where(Stardust.galaxy_id == galaxy_id, Stardust.contradiction_id.is_(None)).limit(200))).scalars().all()
-            for rec in records:
-                if not rec.chroma_id:
-                    continue
-                embedding = await provider.embed(rec.content, task_type="RETRIEVAL_QUERY")
-                similar = await chroma.query(galaxy_id, rec.planet_id, rec.region, embedding, n_results=5)
-                if not similar or not similar["ids"] or not similar["ids"][0]:
-                    continue
-                for i, sid in enumerate(similar["ids"][0]):
-                    if sid == rec.id:
+            PAGE_SIZE = 200
+            last_id = ""
+            while True:
+                records = (await db.execute(
+                    select(Stardust).where(
+                        Stardust.galaxy_id == galaxy_id,
+                        Stardust.contradiction_id.is_(None),
+                        Stardust.id > last_id,
+                    ).order_by(Stardust.id).limit(PAGE_SIZE)
+                )).scalars().all()
+                if not records:
+                    break
+                last_id = records[-1].id
+
+                # batch embed all records in this page upfront
+                texts = [rec.content for rec in records if rec.chroma_id]
+                rec_with_chroma = [rec for rec in records if rec.chroma_id]
+                embeddings = await provider.embed_batch(texts, task_type="RETRIEVAL_QUERY") if texts else []
+                embedding_map = {rec.id: emb for rec, emb in zip(rec_with_chroma, embeddings)}
+
+                for rec in records:
+                    if rec.id not in embedding_map:
                         continue
-                    dist = similar["distances"][0][i] if similar["distances"] else 1.0
-                    if 0.1 < dist < 0.3:  # similarity 0.7-0.9
-                        other = (await db.execute(select(Stardust).where(Stardust.id == sid))).scalar_one_or_none()
-                        if not other:
+                    embedding = embedding_map[rec.id]
+                    similar = await chroma.query(galaxy_id, rec.planet_id, rec.region, embedding, n_results=5)
+                    if not similar or not similar["ids"] or not similar["ids"][0]:
+                        continue
+                    for i, sid in enumerate(similar["ids"][0]):
+                        if sid == rec.id:
                             continue
-                        # Classify
-                        rec_negs = negation_words & set(rec.content.lower().split())
-                        other_negs = negation_words & set(other.content.lower().split())
-                        if rec_negs != other_negs:
-                            already = (await db.execute(
-                                select(Contradiction.id).where(or_(
-                                    and_(Contradiction.record_a_id == rec.id, Contradiction.record_b_id == sid),
-                                    and_(Contradiction.record_a_id == sid, Contradiction.record_b_id == rec.id),
-                                )).limit(1)
-                            )).scalar_one_or_none()
-                            if already:
+                        dist = similar["distances"][0][i] if similar["distances"] else 1.0
+                        if 0.1 < dist < 0.3:  # similarity 0.7-0.9
+                            other = (await db.execute(select(Stardust).where(Stardust.id == sid))).scalar_one_or_none()
+                            if not other:
                                 continue
+                            # Classify
+                            rec_negs = negation_words & set(rec.content.lower().split())
+                            other_negs = negation_words & set(other.content.lower().split())
+                            if rec_negs != other_negs:
+                                already = (await db.execute(
+                                    select(Contradiction.id).where(or_(
+                                        and_(Contradiction.record_a_id == rec.id, Contradiction.record_b_id == sid),
+                                        and_(Contradiction.record_a_id == sid, Contradiction.record_b_id == rec.id),
+                                    )).limit(1)
+                                )).scalar_one_or_none()
+                                if already:
+                                    continue
 
-                            # Determine type
-                            if rec.valid_from and other.valid_from and abs((rec.valid_from - other.valid_from).days) > 30:
-                                conflict_type = "TEMPORAL"
-                            else:
-                                rec_tags = set(json.loads(rec.context_tags) if isinstance(rec.context_tags, str) else rec.context_tags)
-                                other_tags = set(json.loads(other.context_tags) if isinstance(other.context_tags, str) else other.context_tags)
-                                conflict_type = "CONTEXTUAL" if len(rec_tags & other_tags) < 2 else "FACTUAL"
+                                # Determine type
+                                if rec.valid_from and other.valid_from and abs((rec.valid_from - other.valid_from).days) > 30:
+                                    conflict_type = "TEMPORAL"
+                                else:
+                                    rec_tags = set(json.loads(rec.context_tags) if isinstance(rec.context_tags, str) else rec.context_tags)
+                                    other_tags = set(json.loads(other.context_tags) if isinstance(other.context_tags, str) else other.context_tags)
+                                    conflict_type = "CONTEXTUAL" if len(rec_tags & other_tags) < 2 else "FACTUAL"
 
-                            cid = str(uuid.uuid4())
-                            await db.execute(insert(Contradiction).values(
-                                id=cid, galaxy_id=galaxy_id, region=rec.region,
-                                record_a_id=rec.id, record_b_id=sid,
-                                conflict_type=conflict_type, status="UNRESOLVED", detected_by="audit_ai",
-                            ))
-                            results.contradictions_found += 1
-                            results.contradictions_classified += 1
-                            await nebula_service.log_event(galaxy_id=galaxy_id, action_type="CONTRADICTION_DETECTED", initiated_by="audit_ai", record_id=cid, db=db)
+                                cid = str(uuid.uuid4())
+                                await db.execute(insert(Contradiction).values(
+                                    id=cid, galaxy_id=galaxy_id, region=rec.region,
+                                    record_a_id=rec.id, record_b_id=sid,
+                                    conflict_type=conflict_type, status="UNRESOLVED", detected_by="audit_ai",
+                                ))
+                                results.contradictions_found += 1
+                                results.contradictions_classified += 1
+                                await nebula_service.log_event(galaxy_id=galaxy_id, action_type="CONTRADICTION_DETECTED", initiated_by="audit_ai", record_id=cid, db=db)
             await db.commit()
     except Exception as e:
         logger.error(f"Contradiction detection failed: {e}")
@@ -245,6 +283,7 @@ async def run_audit(galaxy_id: str) -> dict:
                 duplicates_merged=results.duplicates_merged, contradictions_found=results.contradictions_found,
                 contradictions_classified=results.contradictions_classified, promotions_made=results.promotions_made,
                 confidence_decays=results.confidence_decays, duration_ms=duration_ms,
+                run_by="scheduler",
                 summary=f"Reviewed {results.records_reviewed}, merged {results.duplicates_merged} dupes, found {results.contradictions_found} contradictions, decayed {results.confidence_decays}, promoted {results.promotions_made}",
             ))
             await db.commit()
