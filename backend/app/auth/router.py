@@ -1,4 +1,5 @@
 """Authentication REST endpoints."""
+import hmac
 import re
 from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -6,6 +7,7 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.database import get_db
 from app.models import Galaxy
 from app.models.user import User
@@ -70,7 +72,11 @@ async def register(body: RegisterRequest, request: Request, db: AsyncSession = D
     # MVP: one user per Galaxy. Check if any Galaxy exists with an owner.
     existing_owner = (await db.execute(select(User).where(User.role == "owner"))).scalar_one_or_none()
     if existing_owner:
-        raise HTTPException(400, "A Galaxy owner already exists. Use /auth/login or wait for Galaxy Join (H2.7).")
+        # Allow owner re-registration only when a valid recovery token is presented
+        recovery_token = get_settings().ORION_OWNER_RECOVERY_TOKEN
+        presented = request.headers.get("X-Recovery-Token", "")
+        if not recovery_token or not hmac.compare_digest(presented, recovery_token):
+            raise HTTPException(400, "A Galaxy owner already exists. Use /auth/login or wait for Galaxy Join (H2.7).")
 
     user = User(
         id=str(uuid4()),
@@ -104,7 +110,11 @@ async def login(body: LoginRequest, request: Request, db: AsyncSession = Depends
 
 
 @router.post("/logout", status_code=204)
-async def logout(request: Request, db: AsyncSession = Depends(get_db)):
+async def logout(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     auth = request.headers.get("authorization", "")
     if auth.startswith("Bearer "):
         await invalidate_token(auth[7:], db)

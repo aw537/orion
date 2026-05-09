@@ -1,7 +1,6 @@
 import hmac
 import logging
 import time
-from collections import defaultdict
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -44,10 +43,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     """Simple sliding-window rate limiter. 120 requests per minute per client IP."""
     WINDOW = 60
     MAX_REQUESTS = 120
+    EVICTION_INTERVAL = 300  # evict stale entries every 5 minutes
 
     def __init__(self, app):
         super().__init__(app)
-        self._hits: dict[str, list[float]] = defaultdict(list)
+        self._hits: dict[str, list[float]] = {}
+        self._last_eviction = time.monotonic()
 
     async def dispatch(self, request: Request, call_next):
         if get_settings().ORION_AUTH_DISABLED:
@@ -56,13 +57,35 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         client = request.client.host if request.client else "unknown"
         now = time.monotonic()
-        window = self._hits[client]
         cutoff = now - self.WINDOW
-        self._hits[client] = window = [t for t in window if t > cutoff]
+        # Periodic eviction of clients with no recent hits (prevents unbounded growth)
+        if now - self._last_eviction > self.EVICTION_INTERVAL:
+            self._hits = {ip: ts for ip, ts in self._hits.items() if any(t > cutoff for t in ts)}
+            self._last_eviction = now
+        window = [t for t in self._hits.get(client, []) if t > cutoff]
         if len(window) >= self.MAX_REQUESTS:
             return JSONResponse(status_code=429, content={"error": "Rate limit exceeded"}, headers={"Retry-After": str(self.WINDOW)})
         window.append(now)
+        self._hits[client] = window
         return await call_next(request)
+
+
+import asyncio as _asyncio
+
+
+async def _session_prune_loop():
+    """Background task: prune expired UserSession rows once per hour."""
+    from app.database import async_session as _async_session
+    from app.auth.service import prune_expired_sessions
+    while True:
+        await _asyncio.sleep(3600)
+        try:
+            async with _async_session() as db:
+                n = await prune_expired_sessions(db)
+                if n:
+                    logger.info(f"Pruned {n} expired session(s)")
+        except Exception as e:
+            logger.warning(f"Session prune failed: {e}")
 
 
 @asynccontextmanager
@@ -71,7 +94,9 @@ async def lifespan(app: FastAPI):
     await get_redis()
     from app.scheduler.audit_scheduler import start_scheduler, stop_scheduler
     start_scheduler()
+    prune_task = _asyncio.create_task(_session_prune_loop())
     yield
+    prune_task.cancel()
     stop_scheduler()
     logger.info("Orion API shutting down — draining background tasks")
     from app.mcp.background import drain

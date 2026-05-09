@@ -22,9 +22,6 @@ TOKEN_EXPIRY_HOURS = 168  # 7 days
 _EPHEMERAL_SECRET = secrets.token_urlsafe(32)
 
 
-def _get_secret() -> str:
-    return get_settings().ORION_LOCAL_TOKEN or _EPHEMERAL_SECRET
-
 
 def hash_password(password: str) -> str:
     salt = secrets.token_hex(16)
@@ -98,3 +95,12 @@ async def invalidate_token(raw_token: str, db: AsyncSession) -> bool:
         await db.commit()
         return True
     return False
+
+
+async def prune_expired_sessions(db: AsyncSession) -> int:
+    """Delete expired UserSession rows. Returns the number of rows deleted."""
+    from sqlalchemy import delete as sql_delete
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    result = await db.execute(sql_delete(UserSession).where(UserSession.expires_at <= now))
+    await db.commit()
+    return result.rowcount
