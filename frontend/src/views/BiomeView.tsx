@@ -47,7 +47,7 @@ export default function BiomeView() {
           <span className="text-[#C4B5FD] bg-[rgba(124,58,237,0.18)] border border-[rgba(124,58,237,0.35)] px-2 py-px rounded-full text-[9px] font-semibold tracking-[0.08em] uppercase">
             {biome.lifecycle_state}
           </span>
-          <span>{biome.stardust_count} records</span>
+          <span>{stardustPage?.total ?? biome.stardust_count} records</span>
         </div>
 
         {/* View toggle */}
