@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useStardust } from '../api/stardust';
 import { apiClient } from '../api/client';
 import { useQueryClient } from '@tanstack/react-query';
@@ -28,7 +28,9 @@ function StardustDetailPage({ stardustId }: { stardustId: string }) {
   const { data: sd, isLoading } = useStardust(stardustId);
   const [editing, setEditing] = useState(false);
   const [content, setContent] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const qc = useQueryClient();
+  const navigate = useNavigate();
 
   React.useEffect(() => { if (sd) setContent(sd.content); }, [sd]);
 
@@ -49,6 +51,18 @@ function StardustDetailPage({ stardustId }: { stardustId: string }) {
       setEditing(false);
     } catch (err) {
       console.error('Stardust save failed:', err);
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await apiClient.delete(`/api/v1/brain/stardust/${stardustId}`);
+      qc.removeQueries({ queryKey: ['stardust', stardustId] });
+      qc.invalidateQueries({ queryKey: ['biome', sd.biome_id, 'stardust'] });
+      navigate(-1);
+    } catch (err) {
+      console.error('Stardust delete failed:', err);
+      setConfirmDelete(false);
     }
   };
 
@@ -95,7 +109,29 @@ function StardustDetailPage({ stardustId }: { stardustId: string }) {
                 <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
               </svg>
             </button>
+            <button
+              onClick={() => setConfirmDelete(!confirmDelete)}
+              className={`w-[26px] h-[26px] rounded-md border flex items-center justify-center cursor-pointer transition-colors duration-150 ${
+                confirmDelete
+                  ? 'border-[rgba(239,68,68,0.5)] text-[#FCA5A5] bg-[rgba(239,68,68,0.12)]'
+                  : 'border-[var(--border-soft)] text-[var(--text-3)] bg-transparent hover:border-[rgba(239,68,68,0.4)] hover:text-[#FCA5A5] hover:bg-[rgba(239,68,68,0.08)]'
+              }`}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14H6L5 6" />
+                <path d="M10 11v6M14 11v6" />
+                <path d="M9 6V4h6v2" />
+              </svg>
+            </button>
           </div>
+          {confirmDelete && (
+            <div className="flex gap-2.5 items-center mb-3">
+              <Button variant="primary" onClick={handleDelete}>Delete</Button>
+              <Button variant="ghost" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+              <span className="text-[11px] text-[#FCA5A5]">This will permanently delete this record.</span>
+            </div>
+          )}
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
