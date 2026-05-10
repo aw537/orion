@@ -1,6 +1,7 @@
 import uuid
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, insert
+from sqlalchemy import select, insert, func
+from app.models.stardust import Stardust
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Galaxy, Planet, Biome
@@ -25,11 +26,21 @@ async def get_planet(planet_id: str, user: User = Depends(get_current_user), db:
         raise HTTPException(404, "Planet not found")
     await permission_checker.require_planet_access(user, planet_id, "read", db)
     biomes = (await db.execute(select(Biome).where(Biome.planet_id == planet_id))).scalars().all()
+    biome_ids = [b.id for b in biomes]
+    biome_counts: dict[str, int] = {}
+    if biome_ids:
+        rows = (await db.execute(
+            select(Stardust.biome_id, func.count(Stardust.id).label("cnt"))
+            .where(Stardust.biome_id.in_(biome_ids))
+            .group_by(Stardust.biome_id)
+        )).all()
+        biome_counts = {row.biome_id: row.cnt for row in rows}
+    total_stardust = sum(biome_counts.values())
     return PlanetDetailResponse(
         id=planet.id, galaxy_id=planet.galaxy_id, name=planet.name, description=planet.description,
-        color=planet.color, planet_type=planet.planet_type, created_at=planet.created_at, stardust_count=planet.stardust_count,
+        color=planet.color, planet_type=planet.planet_type, created_at=planet.created_at, stardust_count=total_stardust,
         health_status=planet.health_status,
-        biomes=[BiomeSummary(id=b.id, name=b.name, lifecycle_state=b.lifecycle_state, stardust_count=b.stardust_count) for b in biomes],
+        biomes=[BiomeSummary(id=b.id, name=b.name, lifecycle_state=b.lifecycle_state, stardust_count=biome_counts.get(b.id, 0)) for b in biomes],
     )
 
 

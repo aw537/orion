@@ -14,12 +14,21 @@ router = APIRouter(prefix="/api/v1/galaxy", tags=["galaxy"])
 @router.get("", response_model=GalaxyResponse | None)
 async def get_galaxy(galaxy: Galaxy = Depends(get_galaxy_for_user), db: AsyncSession = Depends(get_db)):
     planets = (await db.execute(select(Planet).where(Planet.galaxy_id == galaxy.id))).scalars().all()
+    planet_ids = [p.id for p in planets]
+    planet_counts: dict[str, int] = {}
+    if planet_ids:
+        rows = (await db.execute(
+            select(Stardust.planet_id, func.count(Stardust.id).label("cnt"))
+            .where(Stardust.planet_id.in_(planet_ids))
+            .group_by(Stardust.planet_id)
+        )).all()
+        planet_counts = {row.planet_id: row.cnt for row in rows}
     planet_summaries = []
     for p in planets:
         biomes = (await db.execute(
             select(Biome.name).where(Biome.planet_id == p.id, Biome.lifecycle_state.in_(["SEED", "ACTIVE", "MATURE"]))
         )).scalars().all()
-        planet_summaries.append(PlanetSummary(id=p.id, name=p.name, stardust_count=p.stardust_count, health_status=p.health_status, active_biomes=list(biomes), color=p.color or "#6D28D9", planet_type=p.planet_type or "standard"))
+        planet_summaries.append(PlanetSummary(id=p.id, name=p.name, stardust_count=planet_counts.get(p.id, 0), health_status=p.health_status, active_biomes=list(biomes), color=p.color or "#6D28D9", planet_type=p.planet_type or "standard"))
     return GalaxyResponse(id=galaxy.id, name=galaxy.name, created_at=galaxy.created_at, owner_agent=galaxy.owner_agent, strength_score=galaxy.strength_score, total_nodes=galaxy.total_nodes, schema_version=galaxy.schema_version, planets=planet_summaries)
 
 
@@ -41,10 +50,19 @@ async def get_status(galaxy: Galaxy = Depends(get_galaxy_for_user), db: AsyncSes
     total_stardust = (await db.execute(select(func.count()).select_from(Stardust).where(Stardust.galaxy_id == galaxy.id))).scalar() or 0
     total_entities = (await db.execute(select(func.count()).select_from(Entity).where(Entity.galaxy_id == galaxy.id))).scalar() or 0
     unresolved = (await db.execute(select(func.count()).select_from(Contradiction).where(Contradiction.galaxy_id == galaxy.id, Contradiction.status == "UNRESOLVED"))).scalar() or 0
+    status_planet_ids = [p.id for p in planets]
+    status_planet_counts: dict[str, int] = {}
+    if status_planet_ids:
+        status_rows = (await db.execute(
+            select(Stardust.planet_id, func.count(Stardust.id).label("cnt"))
+            .where(Stardust.planet_id.in_(status_planet_ids))
+            .group_by(Stardust.planet_id)
+        )).all()
+        status_planet_counts = {row.planet_id: row.cnt for row in status_rows}
     planet_summaries = []
     for p in planets:
         biomes = (await db.execute(select(Biome.name).where(Biome.planet_id == p.id, Biome.lifecycle_state.in_(["SEED", "ACTIVE", "MATURE"])))).scalars().all()
-        planet_summaries.append(PlanetSummary(id=p.id, name=p.name, stardust_count=p.stardust_count, health_status=p.health_status, active_biomes=list(biomes), color=p.color or "#6D28D9", planet_type=p.planet_type or "standard"))
+        planet_summaries.append(PlanetSummary(id=p.id, name=p.name, stardust_count=status_planet_counts.get(p.id, 0), health_status=p.health_status, active_biomes=list(biomes), color=p.color or "#6D28D9", planet_type=p.planet_type or "standard"))
     return GalaxyStatusResponse(galaxy_id=galaxy.id, galaxy_name=galaxy.name, strength_score=galaxy.strength_score, total_stardust=total_stardust, total_entities=total_entities, planets=planet_summaries, contradiction_count_unresolved=unresolved)
 
 

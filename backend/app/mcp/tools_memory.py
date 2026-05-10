@@ -2,7 +2,7 @@
 import json
 import logging
 from datetime import timezone
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, update
 from app.database import async_session
 from app.models import Galaxy, Planet, Biome, Entity, EntityStardust, EntityTimeline, Stardust, Contradiction
 from app.services import search_service, stardust_service, context_service, sun_service
@@ -204,7 +204,11 @@ async def stardust_delete(stardust_id: str, galaxy_id: str | None = None) -> dic
         await db.execute(delete(_EB).where(_EB.stardust_id == stardust_id))
         await db.execute(delete(_RL).where(_RL.stardust_id == stardust_id))
         await db.execute(delete(_KIL).where(_KIL.stardust_id == stardust_id))
+        biome_id = s.biome_id
+        planet_id = s.planet_id
         await db.delete(s)
+        await db.execute(update(Biome).where(Biome.id == biome_id).values(stardust_count=func.greatest(0, Biome.stardust_count - 1)))
+        await db.execute(update(Planet).where(Planet.id == planet_id).values(stardust_count=func.greatest(0, Planet.stardust_count - 1)))
         await db.commit()
         return {"status": "deleted", "deleted_id": stardust_id}
 
