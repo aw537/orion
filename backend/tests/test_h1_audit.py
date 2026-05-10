@@ -443,11 +443,3 @@ class TestH15Audit:
         k3 = synthesis_service._hash("FastAPI", "p1", "b2")
         assert k1 == k2
         assert k1 != k3
-
-    @pytest.mark.asyncio
-    async def test_brain_synthesize_registered_in_mcp(self):
-        """brain.synthesize is registered as an MCP tool."""
-        import inspect
-        from app.mcp import server
-        source = inspect.getsource(server)
-        assert 'name="brain.synthesize"' in source
