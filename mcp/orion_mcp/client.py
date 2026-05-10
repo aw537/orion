@@ -9,6 +9,7 @@ API_BASE = os.environ.get("ORION_API_URL", "http://localhost:8000")
 API_TOKEN = os.environ.get("ORION_TOKEN", "")
 
 _client: httpx.AsyncClient | None = None
+_cached_galaxy_id: str = ""
 
 
 def _get_client() -> httpx.AsyncClient:
@@ -16,6 +17,24 @@ def _get_client() -> httpx.AsyncClient:
     if _client is None or _client.is_closed:
         _client = httpx.AsyncClient(base_url=API_BASE, timeout=60.0)
     return _client
+
+
+async def close_client() -> None:
+    """Close the shared httpx client on shutdown."""
+    global _client, _cached_galaxy_id
+    if _client is not None and not _client.is_closed:
+        await _client.aclose()
+    _client = None
+    _cached_galaxy_id = ""
+
+
+async def resolve_galaxy_id() -> str:
+    """Fetch and cache the active galaxy ID from the backend (one call per process)."""
+    global _cached_galaxy_id
+    if not _cached_galaxy_id:
+        r = await _get("/api/v1/brain/status")
+        _cached_galaxy_id = r.get("galaxy_id", "")
+    return _cached_galaxy_id
 
 
 def _headers() -> dict:
