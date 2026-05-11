@@ -40,7 +40,11 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Simple sliding-window rate limiter. 120 requests per minute per client IP."""
+    """Simple sliding-window rate limiter. 120 requests per minute per client IP.
+
+    This in-process dict is safe for single-worker asyncio (no await between reads and writes).
+    For multi-worker deployments, replace with a Redis-backed limiter.
+    """
     WINDOW = 60
     MAX_REQUESTS = 120
     EVICTION_INTERVAL = 300  # evict stale entries every 5 minutes
