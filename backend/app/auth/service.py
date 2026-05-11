@@ -17,7 +17,6 @@ from app.models.user import User, UserSession
 TOKEN_EXPIRY_HOURS = 168  # 7 days
 
 
-
 def hash_password(password: str) -> str:
     salt = secrets.token_hex(16)
     h = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 100_000)
