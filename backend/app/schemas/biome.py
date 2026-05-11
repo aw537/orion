@@ -1,10 +1,21 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from datetime import datetime
+
+_TTL_MIN = 60
+_TTL_MAX = 2_592_000  # 30 days
 
 
 class BiomeCreate(BaseModel):
     name: str
     description: str | None = None
+    cache_ttl_seconds: int | None = None
+
+    @field_validator("cache_ttl_seconds")
+    @classmethod
+    def clamp_ttl(cls, v: int | None) -> int | None:
+        if v is None:
+            return v
+        return max(_TTL_MIN, min(_TTL_MAX, v))
 
 
 class BiomeResponse(BaseModel):

@@ -27,7 +27,8 @@ async def create_biome(planet_id: str, body: BiomeCreate, user: User = Depends(g
     if not planet:
         raise HTTPException(404, "Planet not found")
     biome_id = str(uuid.uuid4())
-    await db.execute(insert(Biome).values(id=biome_id, planet_id=planet_id, galaxy_id=planet.galaxy_id, name=body.name, description=body.description))
+    ttl_kw = {"cache_ttl_seconds": body.cache_ttl_seconds} if body.cache_ttl_seconds is not None else {}
+    await db.execute(insert(Biome).values(id=biome_id, planet_id=planet_id, galaxy_id=planet.galaxy_id, name=body.name, description=body.description, **ttl_kw))
     await db.commit()
     from app.services import sun_service
     await sun_service.update_planet_registry(planet.galaxy_id)
