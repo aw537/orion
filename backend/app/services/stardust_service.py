@@ -48,13 +48,17 @@ async def _resolve_biome(db: AsyncSession, planet_id: str, biome_name: str | Non
 
 
 async def _check_contradiction(redis_client: RedisClient, galaxy_id: str, biome_id: str, content: str, context_tags: list[str]) -> str | None:
-    """Check if any cached record shares >2 context tags AND has contradictory content via embedding similarity."""
+    """Check if any cached record shares >2 context tags AND has contradictory content via embedding similarity.
+
+    Embeddings for existing records are read from the Redis cache when available (written by run_async_tasks),
+    so only the new content requires an embed call.
+    """
     if len(context_tags) < 2:
         return None
     cached = await redis_client.get_all_cached_stardust(galaxy_id, biome_id)
     tag_set = set(context_tags)
 
-    # Get embedding for new content
+    # Get embedding for new content only
     try:
         from app.storage.embedding_router import get_embedding_provider
         provider = get_embedding_provider()
@@ -65,12 +69,12 @@ async def _check_contradiction(redis_client: RedisClient, galaxy_id: str, biome_
     for record in cached:
         existing_tags = set(json.loads(record.get("context_tags", "[]")) if isinstance(record.get("context_tags"), str) else record.get("context_tags", []))
         if len(tag_set & existing_tags) > 2:
-            # Compute cosine similarity via embedding
+            existing_embedding = record.get("embedding")
+            if not existing_embedding:
+                # Record not yet indexed — skip to avoid extra embed call
+                continue
             try:
-                existing_content = record.get("content", "")
-                existing_embedding = await provider.embed(existing_content, task_type="RETRIEVAL_DOCUMENT")
                 similarity = _cosine_similarity(new_embedding, existing_embedding)
-                # Low similarity between records sharing many tags = likely contradiction
                 if similarity < 0.75:
                     return record.get("id")
             except Exception:
@@ -318,6 +322,20 @@ async def run_async_tasks(stardust_id: str, content: str, galaxy_id: str, planet
         async with async_session() as db:
             await db.execute(update(Stardust).where(Stardust.id == stardust_id).values(chroma_id=chroma_id))
             await db.commit()
+        # Store embedding in Redis cache so _check_contradiction avoids re-embedding
+        try:
+            redis = await get_redis()
+            rc = RedisClient(redis)
+            cached = await rc.get_stardust(galaxy_id, biome_id, stardust_id)
+            if cached is not None:
+                cached["embedding"] = embedding
+                from app.config import get_cache_ttl
+                async with async_session() as db2:
+                    bm = (await db2.execute(select(Biome).where(Biome.id == biome_id))).scalar_one_or_none()
+                ttl = get_cache_ttl(region, bm.cache_ttl_seconds if bm else None)
+                await rc.cache_stardust(galaxy_id, biome_id, stardust_id, cached, ttl)
+        except Exception:
+            pass
     except Exception as e:
         logger.warning(f"Chroma indexing failed (will retry on audit): {e}")
 
