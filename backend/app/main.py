@@ -1,3 +1,4 @@
+import asyncio as _asyncio
 import hmac
 import logging
 import time
@@ -74,9 +75,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         window.append(now)
         self._hits[client] = window
         return await call_next(request)
-
-
-import asyncio as _asyncio
 
 
 async def _session_prune_loop():
