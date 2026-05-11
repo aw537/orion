@@ -49,9 +49,10 @@ export default function SunPanel({ open, onClose }: Props) {
         </div>
         <button
           onClick={onClose}
+          aria-label="Close"
           className="w-8 h-8 rounded-full border border-[var(--border-soft)] bg-transparent text-[var(--text-2)] flex items-center justify-center hover:text-[var(--text-1)] hover:border-[var(--border)] transition-colors duration-150 flex-shrink-0"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </header>
 
