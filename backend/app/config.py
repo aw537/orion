@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     DATABASE_MAX_OVERFLOW: int = 20
     DATABASE_POOL_TIMEOUT: int = 30
     REDIS_URL: str = "redis://localhost:6379"
+    REDIS_PASSWORD: str = ""
+    # TLS: use rediss:// scheme in REDIS_URL for TLS-encrypted connections.
+    # DATABASE_URL: use postgresql+asyncpg://...?ssl=require for TLS to PostgreSQL.
+    # Both are operator responsibilities; the app passes URLs through as-is.
     CHROMA_URL: str = "http://localhost:8001"
     OLLAMA_URL: str = "http://localhost:11434"
 
@@ -45,6 +49,16 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def clear_settings_cache() -> None:
+    """Invalidate the lru_cache on get_settings().
+
+    Note: module-level consumers that captured the result at import time
+    (e.g. database.py's engine) are unaffected — intended for test fixtures
+    that import modules fresh.
+    """
+    get_settings.cache_clear()
 
 
 def get_cache_ttl(region: str, biome_override: int | None = None) -> int:

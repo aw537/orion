@@ -11,12 +11,28 @@ _redis: Redis | None = None
 _redis_lock = asyncio.Lock()
 
 
+def _build_redis_url(redis_url: str, password: str) -> str:
+    """Inject a password into a Redis URL if one is configured and the URL has no credentials."""
+    if not password:
+        return redis_url
+    from urllib.parse import urlparse, urlunparse
+    parsed = urlparse(redis_url)
+    if parsed.username or parsed.password:
+        return redis_url  # already has credentials — don't overwrite
+    netloc = f":{password}@{parsed.hostname}"
+    if parsed.port:
+        netloc += f":{parsed.port}"
+    return urlunparse(parsed._replace(netloc=netloc))
+
+
 async def get_redis() -> Redis:
     global _redis
     if _redis is None:
         async with _redis_lock:
             if _redis is None:
-                _redis = Redis.from_url(get_settings().REDIS_URL, decode_responses=True)
+                s = get_settings()
+                url = _build_redis_url(s.REDIS_URL, s.REDIS_PASSWORD)
+                _redis = Redis.from_url(url, decode_responses=True)
     return _redis
 
 

@@ -89,3 +89,35 @@ class TestStardustContextTagsNoDoubleparse:
                 func = node.func
                 name = func.attr if isinstance(func, ast.Attribute) else (func.id if isinstance(func, ast.Name) else "")
                 assert name != "loads", "json.loads() found inside _stardust_to_response — remove it"
+
+
+class TestSettingsCache:
+    def test_clear_settings_cache_exists(self):
+        from app.config import clear_settings_cache
+        assert callable(clear_settings_cache)
+
+    def test_clear_settings_cache_resets_lru(self):
+        from app import config
+        s1 = config.get_settings()
+        config.clear_settings_cache()
+        s2 = config.get_settings()
+        # After clearing, a new Settings object is returned
+        assert s1 is not s2
+
+
+class TestRedisPassword:
+    def test_no_password_url_unchanged(self):
+        from app.storage.redis_client import _build_redis_url
+        url = _build_redis_url("redis://localhost:6379", "")
+        assert url == "redis://localhost:6379"
+
+    def test_password_injected_into_bare_url(self):
+        from app.storage.redis_client import _build_redis_url
+        url = _build_redis_url("redis://localhost:6379", "s3cr3t")
+        assert url == "redis://:s3cr3t@localhost:6379"
+
+    def test_password_not_doubled_if_already_in_url(self):
+        from app.storage.redis_client import _build_redis_url
+        url = _build_redis_url("redis://:existing@localhost:6379", "s3cr3t")
+        # URL already has credentials — leave it alone
+        assert url == "redis://:existing@localhost:6379"
