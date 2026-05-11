@@ -58,3 +58,20 @@ class TestSettingsDefaults:
             s = Settings()
             assert s.EMBEDDING_PROVIDER == "google"
             assert s.GOOGLE_API_KEY == "test-key"
+
+
+class TestDeadCodeRemoved:
+    def test_region_reasoning_prompts_removed(self):
+        import app.config as cfg
+        assert not hasattr(cfg, "REGION_REASONING_PROMPTS"), \
+            "REGION_REASONING_PROMPTS should have been removed"
+
+    def test_ephemeral_secret_removed(self):
+        import inspect, app.auth.service as svc
+        src = inspect.getsource(svc)
+        assert "_EPHEMERAL_SECRET" not in src
+
+    def test_subagent_model_removed(self):
+        from app import models
+        assert not hasattr(models, "Subagent")
+        assert not hasattr(models, "SubagentSession")

@@ -1,27 +1,7 @@
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import Text, Integer, Float, DateTime, ForeignKey, func
+from sqlalchemy import Text, Integer, DateTime, ForeignKey, func
 from datetime import datetime
 from app.models.galaxy import Base
-
-
-class Subagent(Base):
-    __tablename__ = "subagents"
-
-    id: Mapped[str] = mapped_column(Text, primary_key=True)
-    galaxy_id: Mapped[str] = mapped_column(Text, ForeignKey("galaxies.id"), nullable=False)
-    agent_name: Mapped[str] = mapped_column(Text, nullable=False)
-    model: Mapped[str | None] = mapped_column(Text)
-    planet_scope: Mapped[str | None] = mapped_column(Text)
-    biome_scope: Mapped[str] = mapped_column(Text, server_default='["*"]')
-    trust_level: Mapped[int] = mapped_column(Integer, server_default="1")
-    write_authority: Mapped[str] = mapped_column(Text, server_default="CACHE_ONLY")
-    session_id: Mapped[str | None] = mapped_column(Text)
-    registered_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    last_active: Mapped[datetime | None] = mapped_column(DateTime)
-    total_reads: Mapped[int] = mapped_column(Integer, server_default="0")
-    total_writes: Mapped[int] = mapped_column(Integer, server_default="0")
-    contradiction_rate: Mapped[float] = mapped_column(Float, server_default="0.0")
-    agent_identity_id: Mapped[str | None] = mapped_column(Text)
 
 
 class AuditRun(Base):

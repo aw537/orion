@@ -30,16 +30,3 @@ class ModelProfile(Base):
     tool_calling: Mapped[str] = mapped_column(Text, server_default="native")
     is_builtin: Mapped[int] = mapped_column(Integer, server_default="1")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-
-
-class SubagentSession(Base):
-    __tablename__ = "subagent_sessions"
-
-    id: Mapped[str] = mapped_column(Text, primary_key=True)
-    subagent_id: Mapped[str] = mapped_column(Text, nullable=False)
-    model_profile_id: Mapped[str | None] = mapped_column(Text)
-    session_token: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
-    started_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    last_active: Mapped[datetime | None] = mapped_column(DateTime)
-    context_bundles_served: Mapped[int] = mapped_column(Integer, server_default="0")
-    total_tokens_served: Mapped[int] = mapped_column(Integer, server_default="0")

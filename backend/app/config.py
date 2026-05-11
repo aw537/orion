@@ -53,16 +53,3 @@ def get_cache_ttl(region: str, biome_override: int | None = None) -> int:
         return biome_override
     ttls = get_settings().region_cache_ttls
     return getattr(ttls, region, 14400)
-
-
-# Reference prompts for cognitive region reasoning. Not imported by backend services
-# directly — available for MCP tools and external consumers via config import.
-REGION_REASONING_PROMPTS = {
-    "analytical": "You are reasoning in analytical mode. Draw on accumulated logical frameworks, decision records, and trade-off analyses. Prioritize precision. Ask: what is the most defensible conclusion given all evidence?",
-    "procedural": "You are reasoning in procedural mode. Draw on accumulated playbooks, established patterns, and step-by-step knowledge. Prioritize proven approaches. Ask: what is the established approach validated in this context?",
-    "contextual": "You are reasoning in contextual mode. Draw on accumulated observations, preferences, and general knowledge. Balance recency with established patterns. Ask: what does the accumulated context suggest?",
-    "creative": "You are reasoning in creative mode. Draw on accumulated analogies, lateral connections, and pattern-breaking insights. Prioritize novel framings. Ask: what non-obvious framing reframes this productively?",
-    "empathetic": "You are reasoning in empathetic mode. Draw on accumulated relational context, emotional history, and communication patterns. Prioritize actual needs. Ask: what is this person experiencing and what do they need?",
-    "critical": "You are reasoning in critical mode. Draw on accumulated failure patterns, edge cases, and assumption challenges. Actively look for what breaks. Ask: where does this break down and what assumptions are wrong?",
-    "strategic": "You are reasoning in strategic mode. Draw on long-horizon thinking, goal alignment, and prioritization history. Weigh short-term against long-term. Ask: does this serve the larger goal and what are second-order effects?",
-}

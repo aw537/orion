@@ -320,20 +320,6 @@ class TestCalibrationLogic:
         await engine.dispose()
 
 
-# ── Cognitive Region Prompts Tests ──────────────────────────────────────────
-
-class TestCognitiveRegionPrompts:
-    def test_all_regions_present(self):
-        from app.config import REGION_REASONING_PROMPTS
-        expected = {"analytical", "procedural", "contextual", "creative", "empathetic", "critical", "strategic"}
-        assert set(REGION_REASONING_PROMPTS.keys()) == expected
-
-    def test_prompts_are_nonempty(self):
-        from app.config import REGION_REASONING_PROMPTS
-        for key, prompt in REGION_REASONING_PROMPTS.items():
-            assert len(prompt) > 20, f"Prompt for {key} is too short"
-
-
 # ── Pydantic Schema Tests ──────────────────────────────────────────────────
 
 class TestBrainSchemas:
