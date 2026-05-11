@@ -13,6 +13,7 @@ import AskBar from '../components/search/AskBar';
 import SynthesisPanel from '../components/search/SynthesisPanel';
 import ContradictionPanel from '../components/galaxy/ContradictionPanel';
 import AgentPanel from '../components/galaxy/AgentPanel';
+import NebulaDrawer from '../components/galaxy/NebulaDrawer';
 import { InboxPanel } from '../components/inbox/InboxPanel';
 
 export default function GalaxyView() {
@@ -27,6 +28,7 @@ export default function GalaxyView() {
   const [synthesisTopic, setSynthesisTopic] = useState('');
   const [askOpen, setAskOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -114,6 +116,7 @@ export default function GalaxyView() {
             <div className="absolute right-0 top-full mt-2 w-44 bg-[rgba(7,4,26,0.95)] backdrop-blur-sm border border-[var(--border)] rounded-xl py-1.5 shadow-[0_16px_32px_rgba(0,0,0,0.5)] animate-[fade-in_100ms_ease-out]">
               {[
                 { label: 'Graph', action: () => navigate('/graph') },
+                { label: 'Nebula', action: () => setDrawerOpen(!drawerOpen) },
                 { label: 'Brain', action: () => setAgentOpen(!agentOpen) },
                 { label: 'Conflicts', action: () => setContradictionOpen(!contradictionOpen) },
                 { label: 'Settings', action: () => navigate('/settings') },
@@ -179,6 +182,9 @@ export default function GalaxyView() {
 
       {/* Inbox panel */}
       {inboxOpen && galaxy && <InboxPanel galaxyId={galaxy.id} onClose={() => setInboxOpen(false)} />}
+
+      {/* Nebula live activity drawer */}
+      <NebulaDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </div>
   );
 }
