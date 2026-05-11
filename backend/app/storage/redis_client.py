@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
+from urllib.parse import urlparse, urlunparse
 from redis.asyncio import Redis
 from app.config import get_settings
 
@@ -15,7 +16,6 @@ def _build_redis_url(redis_url: str, password: str) -> str:
     """Inject a password into a Redis URL if one is configured and the URL has no credentials."""
     if not password:
         return redis_url
-    from urllib.parse import urlparse, urlunparse
     parsed = urlparse(redis_url)
     if parsed.username or parsed.password:
         return redis_url  # already has credentials — don't overwrite
