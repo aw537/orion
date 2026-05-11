@@ -1,8 +1,18 @@
+import asyncio
 import logging
 import threading
 from typing import Protocol
 import httpx
 from app.config import get_settings
+
+_embed_semaphore: asyncio.Semaphore | None = None
+
+
+def _get_semaphore() -> asyncio.Semaphore:
+    global _embed_semaphore
+    if _embed_semaphore is None:
+        _embed_semaphore = asyncio.Semaphore(8)
+    return _embed_semaphore
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +38,11 @@ class OllamaEmbeddingProvider:
         return resp.json()["embedding"]
 
     async def embed_batch(self, texts: list[str], task_type: str = "RETRIEVAL_DOCUMENT") -> list[list[float]]:
-        return [await self.embed(t, task_type) for t in texts]
+        sem = _get_semaphore()
+        async def _embed_one(t: str) -> list[float]:
+            async with sem:
+                return await self.embed(t, task_type)
+        return list(await asyncio.gather(*[_embed_one(t) for t in texts]))
 
 
 class GoogleEmbeddingProvider:
