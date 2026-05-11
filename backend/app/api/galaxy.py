@@ -69,6 +69,7 @@ async def get_status(galaxy: Galaxy = Depends(get_galaxy_for_user), db: AsyncSes
 # ── Galaxy Join (H2.7) ──────────────────────────────────────────────────────
 
 import secrets
+from typing import Literal
 from uuid import uuid4
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel as _BM
@@ -76,7 +77,7 @@ from pydantic import BaseModel as _BM
 
 class InviteRequest(_BM):
     planet_id: str | None = None
-    role: str = "member"
+    role: Literal["member", "viewer"] = "member"
 
 
 class JoinRequest(_BM):
@@ -102,8 +103,10 @@ async def create_invite(body: InviteRequest, user: User = Depends(get_current_us
 
 @router.post("/join")
 async def join_galaxy(body: JoinRequest, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    # Lock the invite row to prevent concurrent redemptions
     invite = (await db.execute(
-        select(GalaxyInvite).where(GalaxyInvite.token == body.invite_token, GalaxyInvite.used_at.is_(None))
+        select(GalaxyInvite).where(GalaxyInvite.token == body.invite_token, GalaxyInvite.used_at.is_(None)).with_for_update()
     )).scalar_one_or_none()
     if not invite:
         raise HTTPException(400, "Invalid or already-used invite")

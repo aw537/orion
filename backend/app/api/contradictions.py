@@ -9,8 +9,10 @@ from app.auth.dependencies import get_galaxy_for_user
 router = APIRouter(prefix="/api/v1/contradictions", tags=["contradictions"])
 
 
+from typing import Literal
+
 class ResolveRequest(BaseModel):
-    resolution_type: str  # a_supersedes_b | b_supersedes_a | coexist | synthesize
+    resolution_type: Literal["a_supersedes_b", "b_supersedes_a", "coexist", "synthesize"]
     synthesis_content: str | None = None
 
 
@@ -27,11 +29,13 @@ async def list_contradictions(
 
 @router.get("/{contradiction_id}")
 async def get_contradiction(
-    contradiction_id: str, db: AsyncSession = Depends(get_db),
+    contradiction_id: str,
+    galaxy: Galaxy = Depends(get_galaxy_for_user),
+    db: AsyncSession = Depends(get_db),
 ):
     from app.models.contradiction import Contradiction
     c = await db.get(Contradiction, contradiction_id)
-    if not c:
+    if not c or c.galaxy_id != galaxy.id:
         raise HTTPException(404, "Contradiction not found")
     return {
         "id": c.id, "record_a_id": c.record_a_id, "record_b_id": c.record_b_id,

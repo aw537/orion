@@ -18,7 +18,7 @@ services:
   orion-api:
     build: ./backend
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./data:/app/data
       - ${OBSIDIAN_VAULT_PATH:-./data/vault}:/vault
@@ -52,7 +52,7 @@ services:
   orion-frontend:
     build: ./frontend
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       - orion-api
 

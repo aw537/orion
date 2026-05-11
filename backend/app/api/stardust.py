@@ -33,7 +33,10 @@ def _stardust_to_response(s: Stardust) -> StardustResponse:
 
 
 @router.get("/biomes/{biome_id}/stardust")
-async def list_stardust(biome_id: str, limit: int = 50, offset: int = 0, db: AsyncSession = Depends(get_db)):
+async def list_stardust(biome_id: str, limit: int = 50, offset: int = 0, galaxy: Galaxy = Depends(get_galaxy_for_user), db: AsyncSession = Depends(get_db)):
+    biome = (await db.execute(select(Biome).where(Biome.id == biome_id))).scalar_one_or_none()
+    if not biome or biome.galaxy_id != galaxy.id:
+        raise HTTPException(404, "Biome not found")
     total = (await db.execute(select(func.count()).select_from(Stardust).where(Stardust.biome_id == biome_id))).scalar() or 0
     rows = (await db.execute(select(Stardust).where(Stardust.biome_id == biome_id).order_by(Stardust.created_at.desc()).offset(offset).limit(limit))).scalars().all()
     return PaginatedResponse(items=[_stardust_to_response(s) for s in rows], total=total, offset=offset, limit=limit)
@@ -82,9 +85,9 @@ async def quick_capture(body: QuickCaptureBody, background_tasks: BackgroundTask
 
 
 @router.get("/stardust/{stardust_id}", response_model=StardustResponse)
-async def get_stardust(stardust_id: str, db: AsyncSession = Depends(get_db)):
+async def get_stardust(stardust_id: str, galaxy: Galaxy = Depends(get_galaxy_for_user), db: AsyncSession = Depends(get_db)):
     s = (await db.execute(select(Stardust).where(Stardust.id == stardust_id))).scalar_one_or_none()
-    if not s:
+    if not s or s.galaxy_id != galaxy.id:
         raise HTTPException(404, "Stardust not found")
     await db.execute(update(Stardust).where(Stardust.id == stardust_id).values(last_accessed=datetime.now(timezone.utc).replace(tzinfo=None), access_count=Stardust.access_count + 1))
     await db.commit()
@@ -93,9 +96,9 @@ async def get_stardust(stardust_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/stardust/{stardust_id}", response_model=StardustResponse)
-async def update_stardust(stardust_id: str, body: StardustUpdate, db: AsyncSession = Depends(get_db)):
+async def update_stardust(stardust_id: str, body: StardustUpdate, galaxy: Galaxy = Depends(get_galaxy_for_user), db: AsyncSession = Depends(get_db)):
     s = (await db.execute(select(Stardust).where(Stardust.id == stardust_id))).scalar_one_or_none()
-    if not s:
+    if not s or s.galaxy_id != galaxy.id:
         raise HTTPException(404, "Stardust not found")
     updates = {}
     if body.content is not None:
