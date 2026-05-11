@@ -1,4 +1,5 @@
 """Orion MCP — HTTP client for the Orion REST API."""
+import asyncio
 import httpx
 import os
 import logging
@@ -10,21 +11,26 @@ API_TOKEN = os.environ.get("ORION_TOKEN", "")
 
 _client: httpx.AsyncClient | None = None
 _cached_galaxy_id: str = ""
+_client_lock = asyncio.Lock()
 
 
-def _get_client() -> httpx.AsyncClient:
+async def _get_client() -> httpx.AsyncClient:
     global _client
-    if _client is None or _client.is_closed:
-        _client = httpx.AsyncClient(base_url=API_BASE, timeout=60.0)
+    if _client is not None and not _client.is_closed:
+        return _client
+    async with _client_lock:
+        if _client is None or _client.is_closed:
+            _client = httpx.AsyncClient(base_url=API_BASE, timeout=60.0)
     return _client
 
 
 async def close_client() -> None:
     """Close the shared httpx client on shutdown."""
     global _client, _cached_galaxy_id
-    if _client is not None and not _client.is_closed:
-        await _client.aclose()
-    _client = None
+    async with _client_lock:
+        if _client is not None and not _client.is_closed:
+            await _client.aclose()
+        _client = None
     _cached_galaxy_id = ""
 
 
@@ -46,7 +52,7 @@ def _headers() -> dict:
 
 async def _get(path: str, params: dict | None = None) -> dict:
     try:
-        c = _get_client()
+        c = await _get_client()
         r = await c.get(path, params=params, headers=_headers())
         r.raise_for_status()
         return r.json()
@@ -65,7 +71,7 @@ async def _get(path: str, params: dict | None = None) -> dict:
 
 async def _post(path: str, json: dict | None = None) -> dict:
     try:
-        c = _get_client()
+        c = await _get_client()
         r = await c.post(path, json=json, headers=_headers())
         r.raise_for_status()
         return r.json()
@@ -84,7 +90,7 @@ async def _post(path: str, json: dict | None = None) -> dict:
 
 async def _put(path: str, json: dict | None = None) -> dict:
     try:
-        c = _get_client()
+        c = await _get_client()
         r = await c.put(path, json=json, headers=_headers())
         r.raise_for_status()
         return r.json()
@@ -269,7 +275,7 @@ async def stardust_get(stardust_id: str):
 
 async def stardust_delete(stardust_id: str):
     try:
-        c = _get_client()
+        c = await _get_client()
         r = await c.delete(f"/api/v1/brain/stardust/{stardust_id}", headers=_headers())
         r.raise_for_status()
         return r.json()
