@@ -19,7 +19,7 @@ class ModelProfileResponse(BaseModel):
     optimal_context_tokens: int
     format_preference: str
     tool_calling: str
-    is_builtin: int
+    is_builtin: bool
     created_at: str
 
 
@@ -58,7 +58,7 @@ async def create_profile(body: ModelProfileCreate, galaxy: Galaxy = Depends(get_
     existing = (await db.execute(select(ModelProfile).where(ModelProfile.model_id == body.model_id))).scalar_one_or_none()
     if existing:
         raise HTTPException(400, f"Profile for '{body.model_id}' already exists")
-    p = ModelProfile(id=f"profile_{uuid.uuid4().hex[:8]}", is_builtin=0, **body.model_dump())
+    p = ModelProfile(id=f"profile_{uuid.uuid4().hex[:8]}", is_builtin=False, **body.model_dump())
     db.add(p)
     await db.commit()
     await db.refresh(p)

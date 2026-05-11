@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import Text, Integer, Float, DateTime, func
+import sqlalchemy as sa
+from sqlalchemy import Text, Integer, Float, DateTime, Boolean, func
 from datetime import datetime
 from app.models.galaxy import Base
 
@@ -28,5 +29,5 @@ class ModelProfile(Base):
     optimal_context_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
     format_preference: Mapped[str] = mapped_column(Text, server_default="structured_json")
     tool_calling: Mapped[str] = mapped_column(Text, server_default="native")
-    is_builtin: Mapped[int] = mapped_column(Integer, server_default="1")
+    is_builtin: Mapped[bool] = mapped_column(Boolean, server_default=sa.true())
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

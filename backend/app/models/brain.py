@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import Text, Integer, Float, DateTime, UniqueConstraint, JSON, ForeignKey, func
+import sqlalchemy as sa
+from sqlalchemy import Text, Integer, Float, DateTime, UniqueConstraint, JSON, ForeignKey, Boolean, func
 from datetime import datetime
 from app.models.galaxy import Base
 
@@ -84,10 +85,7 @@ class TransitionOrientation(Base):
     to_model: Mapped[str] = mapped_column(Text, nullable=False)
     generated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
     orientation_content: Mapped[str] = mapped_column(Text, nullable=False)
-    # TODO: Boolean stored as Integer (SQLite compat). Migrate to Boolean column type
-    # when adding proper boolean support across all models (see also: EntityRelationship.inferred,
-    # Contradiction.human_reviewed, InteractionLog.personal_data, ModelProfile.is_builtin).
-    used: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    used: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.false())
 
 
 class SessionCalibration(Base):
@@ -137,7 +135,7 @@ class EntityRelationship(Base):
     valid_until: Mapped[datetime | None] = mapped_column(DateTime)
     source_stardust_ids: Mapped[list] = mapped_column(JSON, nullable=False, server_default="[]")
     strength: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
-    inferred: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    inferred: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.false())
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
 
 

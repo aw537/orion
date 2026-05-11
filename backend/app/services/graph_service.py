@@ -254,7 +254,7 @@ class GraphService:
                             id=str(uuid4()), galaxy_id=galaxy_id,
                             source_entity_id=entity_id, target_entity_id=rel2.target_entity_id,
                             relationship_type=inferred_type,
-                            confidence=composed_confidence, strength=1, inferred=1,
+                            confidence=composed_confidence, strength=1, inferred=True,
                             source_stardust_ids=[],
                         )
                         db.add(new_rel)

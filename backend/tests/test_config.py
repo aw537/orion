@@ -121,3 +121,24 @@ class TestRedisPassword:
         url = _build_redis_url("redis://:existing@localhost:6379", "s3cr3t")
         # URL already has credentials — leave it alone
         assert url == "redis://:existing@localhost:6379"
+
+
+class TestBooleanColumns:
+    def test_model_types_are_bool(self):
+        from sqlalchemy import Boolean
+        from app.models.brain import TransitionOrientation, EntityRelationship
+        from app.models.contradiction import Contradiction
+        from app.models.nebula import InteractionLog
+        from app.models.profiles import ModelProfile
+
+        checks = [
+            (TransitionOrientation, "used"),
+            (EntityRelationship, "inferred"),
+            (Contradiction, "human_reviewed"),
+            (InteractionLog, "personal_data"),
+            (ModelProfile, "is_builtin"),
+        ]
+        for model_cls, col_name in checks:
+            col = model_cls.__table__.c[col_name]
+            assert isinstance(col.type, Boolean), \
+                f"{model_cls.__name__}.{col_name} should be Boolean, got {type(col.type).__name__}"

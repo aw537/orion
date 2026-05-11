@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import Text, Integer, DateTime, ForeignKey, UniqueConstraint, func
+import sqlalchemy as sa
+from sqlalchemy import Text, Integer, DateTime, ForeignKey, UniqueConstraint, Boolean, func
 from datetime import datetime
 from app.models.galaxy import Base
 
@@ -24,4 +25,4 @@ class Contradiction(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime)
     resolved_by: Mapped[str | None] = mapped_column(Text)
     resolution_note: Mapped[str | None] = mapped_column(Text)
-    human_reviewed: Mapped[int] = mapped_column(Integer, server_default="0")
+    human_reviewed: Mapped[bool] = mapped_column(Boolean, server_default=sa.false())
