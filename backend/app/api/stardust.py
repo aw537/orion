@@ -1,9 +1,14 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from sqlalchemy import select, update, func
+from sqlalchemy import select, update, func, case
+from sqlalchemy import delete as sql_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Galaxy, Stardust, Biome, Planet
+from app.models import (
+    EntityStardust, EntityTimeline, StardustRelationship,
+    EntityBacklink, RoutingLog, KnowledgeIntegrationLog,
+)
 from app.auth.dependencies import get_galaxy_for_user
 from app.schemas.stardust import StardustCreate, StardustResponse, StardustUpdate, WriteReceipt, PaginatedResponse
 from app.services import stardust_service, nebula_service
@@ -114,3 +119,42 @@ async def update_stardust(stardust_id: str, body: StardustUpdate, galaxy: Galaxy
         await db.commit()
         await db.refresh(s)
     return _stardust_to_response(s)
+
+
+@router.delete("/stardust/{stardust_id}")
+async def delete_stardust(
+    stardust_id: str,
+    galaxy: Galaxy = Depends(get_galaxy_for_user),
+    db: AsyncSession = Depends(get_db),
+):
+    s = (await db.execute(
+        select(Stardust).where(Stardust.id == stardust_id, Stardust.galaxy_id == galaxy.id)
+    )).scalar_one_or_none()
+    if not s:
+        raise HTTPException(404, "Stardust not found")
+
+    await nebula_service.log_event(
+        galaxy_id=galaxy.id, action_type="DELETE",
+        initiated_by="user", record_id=stardust_id, db=db,
+    )
+    await db.execute(sql_delete(EntityStardust).where(EntityStardust.stardust_id == stardust_id))
+    await db.execute(sql_delete(EntityTimeline).where(EntityTimeline.source_stardust_id == stardust_id))
+    await db.execute(sql_delete(StardustRelationship).where(
+        (StardustRelationship.source_stardust_id == stardust_id) |
+        (StardustRelationship.target_stardust_id == stardust_id)
+    ))
+    await db.execute(sql_delete(EntityBacklink).where(EntityBacklink.stardust_id == stardust_id))
+    await db.execute(sql_delete(RoutingLog).where(RoutingLog.stardust_id == stardust_id))
+    await db.execute(sql_delete(KnowledgeIntegrationLog).where(KnowledgeIntegrationLog.stardust_id == stardust_id))
+    biome_id, planet_id = s.biome_id, s.planet_id
+    await db.delete(s)
+    await db.execute(
+        update(Biome).where(Biome.id == biome_id)
+        .values(stardust_count=case((Biome.stardust_count > 0, Biome.stardust_count - 1), else_=0))
+    )
+    await db.execute(
+        update(Planet).where(Planet.id == planet_id)
+        .values(stardust_count=case((Planet.stardust_count > 0, Planet.stardust_count - 1), else_=0))
+    )
+    await db.commit()
+    return {"status": "deleted", "deleted_id": stardust_id}
