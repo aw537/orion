@@ -6,7 +6,6 @@ import GalaxyView from './views/GalaxyView';
 import PlanetView from './views/PlanetView';
 import BiomeView from './views/BiomeView';
 import DetailView from './views/DetailView';
-import DashboardView from './views/DashboardView';
 import OnboardingView from './views/OnboardingView';
 import SunView from './views/SunView';
 import SettingsView from './views/SettingsView';
@@ -28,7 +27,6 @@ export default function App() {
           <Route path="/planet/:planetId" element={<ShellRoute><PlanetView /></ShellRoute>} />
           <Route path="/biome/:biomeId" element={<ShellRoute><BiomeView /></ShellRoute>} />
           <Route path="/detail/:type/:id" element={<ShellRoute><DetailView /></ShellRoute>} />
-          <Route path="/dashboard" element={<ShellRoute><DashboardView /></ShellRoute>} />
           <Route path="/onboarding" element={<OnboardingView />} />
           <Route path="/sun" element={<ShellRoute><SunView /></ShellRoute>} />
           <Route path="/settings" element={<ShellRoute><SettingsView /></ShellRoute>} />

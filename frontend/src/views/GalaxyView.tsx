@@ -6,7 +6,6 @@ import { apiClient } from '../api/client';
 import { NavButton } from '../components/ui';
 import GalaxyCanvas from '../components/galaxy/GalaxyCanvas';
 import StrengthWidget from '../components/galaxy/StrengthWidget';
-import NebulaDrawer from '../components/galaxy/NebulaDrawer';
 import SunPanel from '../components/galaxy/SunPanel';
 import CreatePlanetModal from '../components/galaxy/CreatePlanetModal';
 import SearchModal from '../components/search/SearchModal';
@@ -19,7 +18,6 @@ import { InboxPanel } from '../components/inbox/InboxPanel';
 export default function GalaxyView() {
   const { data: galaxy, isLoading } = useGalaxy();
   const [strengthExpanded, setStrengthExpanded] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [sunOpen, setSunOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -116,7 +114,6 @@ export default function GalaxyView() {
             <div className="absolute right-0 top-full mt-2 w-44 bg-[rgba(7,4,26,0.95)] backdrop-blur-sm border border-[var(--border)] rounded-xl py-1.5 shadow-[0_16px_32px_rgba(0,0,0,0.5)] animate-[fade-in_100ms_ease-out]">
               {[
                 { label: 'Graph', action: () => navigate('/graph') },
-                { label: 'Dashboard', action: () => navigate('/dashboard') },
                 { label: 'Brain', action: () => setAgentOpen(!agentOpen) },
                 { label: 'Conflicts', action: () => setContradictionOpen(!contradictionOpen) },
                 { label: 'Settings', action: () => navigate('/settings') },
@@ -158,18 +155,6 @@ export default function GalaxyView() {
           </div>
         </div>
       </div>
-
-      {/* Bottom center: nebula toggle */}
-      <div className="absolute bottom-7 left-1/2 -translate-x-1/2 z-[5] pointer-events-auto">
-        <NavButton onClick={() => setDrawerOpen(!drawerOpen)}>
-          <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] shadow-[0_0_8px_#34D399] animate-[pulse-dot_2s_ease-in-out_infinite]" />
-          Nebula stream
-          <span className="text-[var(--text-3)]">↑</span>
-        </NavButton>
-      </div>
-
-      {/* Nebula drawer */}
-      <NebulaDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
 
       {/* Sun panel */}
       <SunPanel open={sunOpen} onClose={() => setSunOpen(false)} />
