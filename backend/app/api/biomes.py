@@ -63,7 +63,7 @@ async def get_biome_graph(biome_id: str, user: User = Depends(get_current_user),
     biome = (await db.execute(select(Biome).where(Biome.id == biome_id))).scalar_one_or_none()
     if not biome:
         raise HTTPException(404, "Biome not found")
-    await permission_checker.require_planet_access(user, biome.planet_id, db)
+    await permission_checker.require_planet_access(user, biome.planet_id, "read", db)
     stardust_rows = (await db.execute(select(Stardust).where(Stardust.biome_id == biome_id).limit(200))).scalars().all()
     nodes, edges = [], []
     stardust_ids = set()
@@ -98,7 +98,7 @@ async def get_biome_entities(biome_id: str, user: User = Depends(get_current_use
     biome = (await db.execute(select(Biome).where(Biome.id == biome_id))).scalar_one_or_none()
     if not biome:
         raise HTTPException(404, "Biome not found")
-    await permission_checker.require_planet_access(user, biome.planet_id, db)
+    await permission_checker.require_planet_access(user, biome.planet_id, "read", db)
     stardust_ids = (await db.execute(select(Stardust.id).where(Stardust.biome_id == biome_id))).scalars().all()
     if not stardust_ids:
         return []

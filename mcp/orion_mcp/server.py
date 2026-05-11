@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("orion.mcp")
 
 MCP_PORT = int(os.environ.get("MCP_PORT", "8787"))
-mcp = FastMCP("Orion", host="0.0.0.0", port=MCP_PORT)
+mcp = FastMCP("Orion", host="127.0.0.1", port=MCP_PORT)
 
 
 _DEFAULT_AGENT = "mcp_client"
@@ -390,6 +390,8 @@ def _close_client_sync():
 
 
 def main():
+    if not client.API_TOKEN:
+        raise SystemExit("ORION_TOKEN must be set before starting the MCP server")
     atexit.register(_close_client_sync)
     logger.info(f"Starting Orion MCP server on port {MCP_PORT}")
     logger.info(f"Backend API: {client.API_BASE}")
