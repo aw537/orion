@@ -175,8 +175,9 @@ export default function OnboardingView() {
         {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((s) => (
           <button
             key={s}
-            onClick={() => setStep(s)}
-            className={`px-3 py-1.5 rounded-full text-[11px] font-mono tracking-[0.04em] cursor-pointer border backdrop-blur-sm transition-all duration-150 ${step === s ? 'text-white bg-[var(--violet-700)] border-[var(--violet-700)]' : 'text-[var(--text-3)] bg-[rgba(7,4,26,0.6)] border-[var(--border-soft)] hover:text-[var(--text-1)]'}`}
+            onClick={() => s <= step && setStep(s)}
+            disabled={s > step}
+            className={`px-3 py-1.5 rounded-full text-[11px] font-mono tracking-[0.04em] border backdrop-blur-sm transition-all duration-150 ${step === s ? 'text-white bg-[var(--violet-700)] border-[var(--violet-700)] cursor-pointer' : s < step ? 'text-[var(--text-3)] bg-[rgba(7,4,26,0.6)] border-[var(--border-soft)] hover:text-[var(--text-1)] cursor-pointer' : 'text-[rgba(255,255,255,0.2)] bg-[rgba(7,4,26,0.4)] border-[rgba(255,255,255,0.06)] cursor-not-allowed'}`}
           >
             Step {s}
           </button>
