@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { askBrain, type AskResult } from '../../api/brain';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface Props {
   onClose: () => void;
@@ -20,6 +21,7 @@ export default function AskBar({ onClose, onSynthesize }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const trapRef = useFocusTrap<HTMLDivElement>(true);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
@@ -44,7 +46,7 @@ export default function AskBar({ onClose, onSynthesize }: Props) {
     <div className="absolute inset-0 z-[20] flex flex-col items-center justify-start pt-[12vh]" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="absolute inset-0 bg-[rgba(7,4,26,0.85)] backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative w-full max-w-[640px] z-[21]">
+      <div ref={trapRef} className="relative w-full max-w-[640px] z-[21]" role="dialog" aria-modal="true" aria-label="Ask your Galaxy">
         {/* Input */}
         <form onSubmit={handleSubmit}>
           <div className="flex items-center gap-3 bg-[rgba(15,10,40,0.95)] border border-[var(--border)] rounded-2xl px-5 py-3.5 shadow-[0_8px_32px_rgba(0,0,0,0.5)]">

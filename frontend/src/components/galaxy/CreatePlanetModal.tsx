@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '../ui';
 import { apiClient } from '../../api/client';
 import { useQueryClient } from '@tanstack/react-query';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 const SWATCHES = ['#A78BFA', '#EC4899', '#F97316', '#14B8A6', '#6EE7B7', '#FCD34D', '#8B5CF6'];
 
@@ -13,6 +14,7 @@ export default function CreatePlanetModal({ open, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
+  const trapRef = useFocusTrap<HTMLDivElement>(open);
 
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 60);
@@ -38,7 +40,7 @@ export default function CreatePlanetModal({ open, onClose }: Props) {
       className="absolute inset-0 z-[11] bg-[rgba(7,4,26,0.7)] backdrop-blur-sm flex items-center justify-center pointer-events-auto animate-[fade-in_220ms_ease-expo]"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="w-[540px] bg-gradient-to-b from-[rgba(45,27,105,0.5)] to-[rgba(45,27,105,0.3)] border border-[var(--border)] rounded-[14px] p-7 shadow-[0_30px_80px_rgba(0,0,0,0.55)]">
+      <div ref={trapRef} className="w-[540px] bg-gradient-to-b from-[rgba(45,27,105,0.5)] to-[rgba(45,27,105,0.3)] border border-[var(--border)] rounded-[14px] p-7 shadow-[0_30px_80px_rgba(0,0,0,0.55)]" role="dialog" aria-modal="true" aria-label="Create a new Planet">
         <h3 className="font-display text-lg font-medium mb-1">Create a new Planet</h3>
         <p className="text-[var(--text-3)] text-xs mb-5">A Planet is a knowledge domain — a top-level region of your Galaxy.</p>
 
