@@ -49,8 +49,9 @@ export default function SearchModal({ onClose, onSynthesize }: Props) {
     if (!q.trim()) return text;
     const re = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
     const parts = text.split(re);
+    const tester = new RegExp(re.source, 'i');
     return parts.map((part, i) =>
-      re.test(part) ? <mark key={i} className="bg-[rgba(245,158,11,0.22)] text-[#FCD34D] px-0.5 rounded-sm">{part}</mark> : part
+      tester.test(part) ? <mark key={i} className="bg-[rgba(245,158,11,0.22)] text-[#FCD34D] px-0.5 rounded-sm">{part}</mark> : part
     );
   }
 

@@ -95,15 +95,16 @@ export default function OnboardingView() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === 'Enter') { if (step < TOTAL_STEPS) setStep(step + 1); else handleFinish(); }
       else if (e.key === 'ArrowLeft' && step > 1) setStep(step - 1);
       else if (e.key === 'ArrowRight' && step < TOTAL_STEPS) setStep(step + 1);
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [step, role, templateId, source, biomeName, userName, goal, tools, commStyle, contradictionPref, steeringDocPath]);
+  }, [step, role, templateId, source, biomeName, userName, goal, tools, commStyle, contradictionPref, steeringDocPath, handleFinish]);
 
-  const handleFinish = async () => {
+  const handleFinish = useCallback(async () => {
     if (loading) return;
     setLoading(true);
     setLoadingLabel('Creating…');
@@ -148,7 +149,7 @@ export default function OnboardingView() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [loading, role, templateId, biomeName, source, selectedFiles, importPath, userName, goal, tools, commStyle, contradictionPref, steeringDocPath, steeringDocContent, qc, navigate, clearProgress]);
 
   const slug = biomeName ? biomeName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') : 'untitled';
   const nameLen = biomeName.length;
