@@ -123,6 +123,18 @@ class TestRedisPassword:
         assert url == "redis://:existing@localhost:6379"
 
 
+class TestFKConstraints:
+    def test_routing_log_galaxy_fk(self):
+        from app.models.routing_log import RoutingLog
+        fk_targets = {fk.column.table.name for fk in RoutingLog.__table__.c["galaxy_id"].foreign_keys}
+        assert "galaxies" in fk_targets, "routing_log.galaxy_id missing FK to galaxies"
+
+    def test_graph_path_cache_galaxy_fk(self):
+        from app.models.brain import GraphPathCache
+        fk_targets = {fk.column.table.name for fk in GraphPathCache.__table__.c["galaxy_id"].foreign_keys}
+        assert "galaxies" in fk_targets, "graph_path_cache.galaxy_id missing FK to galaxies"
+
+
 class TestBooleanColumns:
     def test_model_types_are_bool(self):
         from sqlalchemy import Boolean

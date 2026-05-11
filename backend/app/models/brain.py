@@ -168,7 +168,7 @@ class GraphPathCache(Base):
     __tablename__ = "graph_path_cache"
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
-    galaxy_id: Mapped[str] = mapped_column(Text, nullable=False)
+    galaxy_id: Mapped[str] = mapped_column(Text, ForeignKey("galaxies.id"), nullable=False)
     source_node_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
     source_node_type: Mapped[str] = mapped_column(Text, nullable=False)
     target_node_id: Mapped[str] = mapped_column(Text, nullable=False)

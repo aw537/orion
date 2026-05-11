@@ -8,7 +8,7 @@ class RoutingLog(Base):
     __tablename__ = "routing_log"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    galaxy_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    galaxy_id: Mapped[str] = mapped_column(Text, ForeignKey("galaxies.id"), nullable=False, index=True)
     stardust_id: Mapped[str] = mapped_column(Text, ForeignKey("stardust.id"), nullable=False, index=True)
     routed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
     caller_suggested_planet: Mapped[str | None] = mapped_column(Text)

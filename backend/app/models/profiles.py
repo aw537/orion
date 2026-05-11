@@ -9,6 +9,8 @@ class StrengthHistory(Base):
     __tablename__ = "strength_history"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # No FK on galaxy_id: append-only analytics log; FK cascade would silently
+    # delete historical scores if a galaxy is removed. Accept orphaned rows instead.
     galaxy_id: Mapped[str] = mapped_column(Text, nullable=False)
     score: Mapped[float] = mapped_column(Float, nullable=False)
     volume_score: Mapped[float] = mapped_column(Float, nullable=False)
