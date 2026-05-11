@@ -59,6 +59,7 @@ function StardustDetailPage({ stardustId }: { stardustId: string }) {
       await apiClient.delete(`/api/v1/brain/stardust/${stardustId}`);
       qc.removeQueries({ queryKey: ['stardust', stardustId] });
       qc.invalidateQueries({ queryKey: ['biome', sd.biome_id, 'stardust'] });
+      qc.invalidateQueries({ queryKey: ['planet', sd.planet_id] });
       navigate(-1);
     } catch (err) {
       console.error('Stardust delete failed:', err);
