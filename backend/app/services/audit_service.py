@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 import uuid
@@ -12,8 +11,6 @@ from app.storage.embedding_router import get_embedding_provider
 from app.services import nebula_service
 
 logger = logging.getLogger(__name__)
-
-_audit_lock = asyncio.Lock()
 
 
 class AuditResults:
@@ -259,10 +256,14 @@ async def _update_strength(galaxy_id: str):
 
 
 async def run_audit(galaxy_id: str) -> dict:
-    """Run all 7 audit functions. Guarded against concurrent execution."""
-    if _audit_lock.locked():
+    """Run all 7 audit functions. Guarded against concurrent execution via Redis distributed lock."""
+    from app.storage.redis_client import get_redis
+    lock_key = f"orion:{galaxy_id}:audit_lock"
+    redis = await get_redis()
+    acquired = await redis.set(lock_key, "1", nx=True, ex=3600)
+    if not acquired:
         return {"error": "Audit already in progress", "skipped": True}
-    async with _audit_lock:
+    try:
         start = datetime.now(timezone.utc).replace(tzinfo=None)
         results = AuditResults()
 
@@ -294,3 +295,5 @@ async def run_audit(galaxy_id: str) -> dict:
                 "duplicates_merged": results.duplicates_merged, "contradictions_found": results.contradictions_found,
                 "promotions_made": results.promotions_made, "confidence_decays": results.confidence_decays,
                 "failures": results.failures}
+    finally:
+        await redis.delete(lock_key)
