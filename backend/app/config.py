@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     ORION_LOCAL_TOKEN: str = ""
     ORION_AUTH_DISABLED: bool = True
-    ORION_OWNER_RECOVERY_TOKEN: str = ""  # when set, allows re-registering an owner
+    ORION_OWNER_RECOVERY_TOKEN: str = ""  # SHA-256 hex digest of the token; allows re-registering an owner
 
     MCP_PORT: int = 8787
     API_PORT: int = 8000

@@ -1,4 +1,5 @@
 """Authentication REST endpoints."""
+import hashlib
 import hmac
 import re
 from uuid import uuid4
@@ -75,7 +76,8 @@ async def register(body: RegisterRequest, request: Request, db: AsyncSession = D
         # Allow owner re-registration only when a valid recovery token is presented
         recovery_token = get_settings().ORION_OWNER_RECOVERY_TOKEN
         presented = request.headers.get("X-Recovery-Token", "")
-        if not recovery_token or not hmac.compare_digest(presented, recovery_token):
+        presented_hash = hashlib.sha256(presented.encode()).hexdigest()
+        if not recovery_token or not hmac.compare_digest(presented_hash, recovery_token):
             raise HTTPException(400, "A Galaxy owner already exists. Use /auth/login or wait for Galaxy Join (H2.7).")
 
     user = User(
