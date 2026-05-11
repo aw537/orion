@@ -187,22 +187,27 @@ async def _infer_transitive_relationships(galaxy_id: str, results: AuditResults)
 
 
 async def _confidence_decay(galaxy_id: str, results: AuditResults):
-    """Apply confidence decay to stale records. Updates last_accessed after decay to prevent compounding."""
+    """Apply confidence decay to stale records. Tracks decay time in last_decayed_at, leaving last_accessed intact."""
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     cutoff_30 = now - timedelta(days=30)
     cutoff_90 = now - timedelta(days=90)
     async with async_session() as db:
         stale = (await db.execute(
-            select(Stardust).where(Stardust.galaxy_id == galaxy_id, Stardust.last_accessed < cutoff_30, Stardust.valid_until.is_(None))
+            select(Stardust).where(
+                Stardust.galaxy_id == galaxy_id,
+                Stardust.last_accessed < cutoff_30,
+                Stardust.valid_until.is_(None),
+                # Skip records already decayed in the last 30 days
+                (Stardust.last_decayed_at.is_(None) | (Stardust.last_decayed_at < cutoff_30)),
+            )
         )).scalars().all()
 
         for s in stale:
             old_conf = s.confidence
             factor = 0.85 if (s.last_accessed and s.last_accessed < cutoff_90) else 0.95
             new_conf = old_conf * factor
-            # Set last_accessed to now so this record won't be re-decayed next audit
             await db.execute(update(Stardust).where(Stardust.id == s.id).values(
-                confidence=new_conf, last_accessed=now,
+                confidence=new_conf, last_decayed_at=now,
             ))
             results.confidence_decays += 1
             await nebula_service.log_event(galaxy_id=galaxy_id, action_type="EVICT", initiated_by="audit_ai", record_id=s.id, confidence_delta=new_conf - old_conf, db=db)
