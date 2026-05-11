@@ -130,7 +130,6 @@ from app.api import contradictions as contradictions_api
 from app.api import synthesis as synthesis_api
 from app.api import ask as ask_api
 from app.api import admin as admin_api
-from app.api import merge as merge_api
 from app.api import brain as brain_api
 from app.api import routing as routing_api
 from app.api import inbox as inbox_api
@@ -154,7 +153,6 @@ app.include_router(contradictions_api.router)
 app.include_router(synthesis_api.router)
 app.include_router(ask_api.router)
 app.include_router(admin_api.router)
-app.include_router(merge_api.router)
 app.include_router(brain_api.router)
 app.include_router(routing_api.router)
 app.include_router(inbox_api.router)

@@ -24,22 +24,6 @@ class Subagent(Base):
     agent_identity_id: Mapped[str | None] = mapped_column(Text)
 
 
-class GravityBridge(Base):
-    __tablename__ = "gravity_bridges"
-
-    id: Mapped[str] = mapped_column(Text, primary_key=True)
-    galaxy_id: Mapped[str] = mapped_column(Text, ForeignKey("galaxies.id"), nullable=False)
-    source_planet_id: Mapped[str] = mapped_column(Text, ForeignKey("planets.id"), nullable=False)
-    target_planet_id: Mapped[str] = mapped_column(Text, ForeignKey("planets.id"), nullable=False)
-    bridge_type: Mapped[str] = mapped_column(Text, nullable=False)
-    opened_by: Mapped[str | None] = mapped_column(Text)
-    opened_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTime)
-    scope_constraints: Mapped[str | None] = mapped_column(Text)
-    traversal_count: Mapped[int] = mapped_column(Integer, server_default="0")
-    target_galaxy_id: Mapped[str | None] = mapped_column(Text)
-
-
 class AuditRun(Base):
     __tablename__ = "audit_runs"
 

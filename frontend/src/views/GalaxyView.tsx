@@ -14,7 +14,6 @@ import AskBar from '../components/search/AskBar';
 import SynthesisPanel from '../components/search/SynthesisPanel';
 import ContradictionPanel from '../components/galaxy/ContradictionPanel';
 import AgentPanel from '../components/galaxy/AgentPanel';
-import MergePanel from '../components/galaxy/MergePanel';
 import { InboxPanel } from '../components/inbox/InboxPanel';
 
 export default function GalaxyView() {
@@ -29,7 +28,6 @@ export default function GalaxyView() {
   const [synthesisOpen, setSynthesisOpen] = useState(false);
   const [synthesisTopic, setSynthesisTopic] = useState('');
   const [askOpen, setAskOpen] = useState(false);
-  const [mergeOpen, setMergeOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
@@ -121,7 +119,6 @@ export default function GalaxyView() {
                 { label: 'Dashboard', action: () => navigate('/dashboard') },
                 { label: 'Brain', action: () => setAgentOpen(!agentOpen) },
                 { label: 'Conflicts', action: () => setContradictionOpen(!contradictionOpen) },
-                { label: 'Merge', action: () => setMergeOpen(!mergeOpen) },
                 { label: 'Settings', action: () => navigate('/settings') },
               ].map((item) => (
                 <button
@@ -194,9 +191,6 @@ export default function GalaxyView() {
 
       {/* Ask bar */}
       {askOpen && <AskBar onClose={() => setAskOpen(false)} onSynthesize={(t) => { setSynthesisTopic(t); setSynthesisOpen(true); }} />}
-
-      {/* Merge panel */}
-      <MergePanel open={mergeOpen} onClose={() => setMergeOpen(false)} />
 
       {/* Inbox panel */}
       {inboxOpen && galaxy && <InboxPanel galaxyId={galaxy.id} onClose={() => setInboxOpen(false)} />}
