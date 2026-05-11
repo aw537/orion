@@ -1,5 +1,5 @@
 """Agent identity and brain REST API endpoints."""
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
@@ -33,7 +33,7 @@ async def get_agent(agent_name: str, galaxy: Galaxy = Depends(get_galaxy_for_use
         select(AgentIdentity).where(AgentIdentity.galaxy_id == galaxy.id, AgentIdentity.agent_name == agent_name)
     )).scalar_one_or_none()
     if not agent:
-        return {"error": f"Agent '{agent_name}' not found"}
+        raise HTTPException(404, f"Agent '{agent_name}' not found")
     return {
         "id": agent.id, "agent_name": agent.agent_name, "agent_type": agent.agent_type,
         "current_model": agent.current_model, "model_family": agent.model_family,
@@ -54,7 +54,7 @@ async def get_agent_expertise(agent_name: str, galaxy: Galaxy = Depends(get_gala
         select(AgentIdentity).where(AgentIdentity.galaxy_id == galaxy.id, AgentIdentity.agent_name == agent_name)
     )).scalar_one_or_none()
     if not agent:
-        return {"error": f"Agent '{agent_name}' not found"}
+        raise HTTPException(404, f"Agent '{agent_name}' not found")
     return await agent_identity_service.get_expertise(agent.id, db, limit=50)
 
 
@@ -64,7 +64,7 @@ async def get_agent_sessions(agent_name: str, limit: int = Query(20, le=100), ga
         select(AgentIdentity).where(AgentIdentity.galaxy_id == galaxy.id, AgentIdentity.agent_name == agent_name)
     )).scalar_one_or_none()
     if not agent:
-        return {"error": f"Agent '{agent_name}' not found"}
+        raise HTTPException(404, f"Agent '{agent_name}' not found")
     sessions = (await db.execute(
         select(AgentSession).where(AgentSession.agent_identity_id == agent.id)
         .order_by(desc(AgentSession.started_at)).limit(limit)
