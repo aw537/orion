@@ -58,24 +58,28 @@ class RelationshipExtractor:
         if not alt:
             return []
 
-        results = []
-        for rel_type, patterns in RELATIONSHIP_PATTERNS.items():
-            for tmpl in patterns:
-                pattern = tmpl.replace("{E}", f"(?:{alt})")
+        # Compile all patterns once for this entity batch
+        compiled: list[tuple[str, re.Pattern]] = []
+        for rel_type, templates in RELATIONSHIP_PATTERNS.items():
+            for tmpl in templates:
                 try:
-                    for m in re.finditer(pattern, content, re.IGNORECASE):
-                        src = m.group("source").lower()
-                        tgt = m.group("target").lower()
-                        if src in entity_map and tgt in entity_map and src != tgt:
-                            results.append(ExtractedRelationship(
-                                source_entity=entity_map[src],
-                                target_entity=entity_map[tgt],
-                                relationship_type=rel_type,
-                                confidence=0.75,
-                                matched_text=m.group(0),
-                            ))
+                    compiled.append((rel_type, re.compile(tmpl.replace("{E}", f"(?:{alt})"), re.IGNORECASE)))
                 except re.error:
                     continue
+
+        results = []
+        for rel_type, pattern in compiled:
+            for m in pattern.finditer(content):
+                src = m.group("source").lower()
+                tgt = m.group("target").lower()
+                if src in entity_map and tgt in entity_map and src != tgt:
+                    results.append(ExtractedRelationship(
+                        source_entity=entity_map[src],
+                        target_entity=entity_map[tgt],
+                        relationship_type=rel_type,
+                        confidence=0.75,
+                        matched_text=m.group(0),
+                    ))
 
         return self._deduplicate(results)
 

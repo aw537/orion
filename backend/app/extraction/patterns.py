@@ -16,8 +16,8 @@ ENTITY_PATTERNS: dict[str, list[str]] = {
         r'`([a-zA-Z][a-zA-Z0-9_\-\.]{2,})`',
     ],
     "decision": [
-        r'(?:decided|chose|selected|adopted|rejected|approved|denied)\s+(?:to\s+)?(.{10,80}?)(?:\.|$)',
-        r'(?:decision|choice|tradeoff):\s*(.{10,80}?)(?:\.|$)',
+        r'(?:decided|chose|selected|adopted|rejected|approved|denied)\s+(?:to\s+)?([^.\n]{10,80})',
+        r'(?:decision|choice|tradeoff):\s*([^.\n]{10,80})',
     ],
     "code_ref": [
         # Require at least one segment to contain an underscore or be CamelCase (uppercase letter mid-word)
