@@ -209,9 +209,16 @@ async def write_stardust(
 
         # H1.5: Invalidate synthesis caches for this galaxy
         try:
-            keys = await redis.keys(f"orion:{galaxy_id}:synthesis:*")
-            if keys:
-                await redis.delete(*keys)
+            cursor = 0
+            pattern = f"orion:{galaxy_id}:synthesis:*"
+            keys_to_delete: list[str] = []
+            while True:
+                cursor, batch = await redis.scan(cursor, match=pattern, count=100)
+                keys_to_delete.extend(batch)
+                if cursor == 0:
+                    break
+            if keys_to_delete:
+                await redis.delete(*keys_to_delete)
         except Exception:
             pass
 

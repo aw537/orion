@@ -35,7 +35,13 @@ async def synthesize(body: SynthesizeRequest, galaxy: Galaxy = Depends(get_galax
 @router.delete("/synthesize/cache")
 async def invalidate_synthesis_cache(galaxy: Galaxy = Depends(get_galaxy_for_user)):
     redis = await get_redis()
-    keys = await redis.keys(f"orion:{galaxy.id}:synthesis:*")
-    if keys:
-        await redis.delete(*keys)
-    return {"status": "cleared", "keys_removed": len(keys)}
+    keys_to_delete: list[str] = []
+    cursor = 0
+    while True:
+        cursor, batch = await redis.scan(cursor, match=f"orion:{galaxy.id}:synthesis:*", count=100)
+        keys_to_delete.extend(batch)
+        if cursor == 0:
+            break
+    if keys_to_delete:
+        await redis.delete(*keys_to_delete)
+    return {"status": "cleared", "keys_removed": len(keys_to_delete)}

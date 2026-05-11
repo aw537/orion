@@ -71,12 +71,15 @@ class RedisClient:
 
     async def get_all_cached_stardust(self, galaxy_id: str, biome_id: str) -> list[dict]:
         ids = await self.get_recent_stardust(galaxy_id, biome_id, limit=100)
-        results = []
-        for sid in ids:
-            data = await self.get_stardust(galaxy_id, biome_id, sid)
-            if data:
-                results.append(data)
-        return results
+        if not ids:
+            return []
+        keys = [self.cache_key(galaxy_id, biome_id, sid) for sid in ids]
+        try:
+            raws = await self.r.mget(*keys)
+            return [json.loads(raw) for raw in raws if raw]
+        except Exception as e:
+            logger.warning(f"Redis get_all_cached_stardust failed (degraded): {e}")
+            return []
 
     # --- Strength ---
     async def set_strength(self, galaxy_id: str, score: float):
