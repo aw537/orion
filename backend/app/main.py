@@ -8,6 +8,8 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.storage.redis_client import get_redis, close_redis
 from app.config import get_settings
+from app.database import async_session
+from app.auth.service import prune_expired_sessions
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s [%(name)s] %(message)s")
 logger = logging.getLogger("orion")
@@ -79,12 +81,10 @@ import asyncio as _asyncio
 
 async def _session_prune_loop():
     """Background task: prune expired UserSession rows once per hour."""
-    from app.database import async_session as _async_session
-    from app.auth.service import prune_expired_sessions
     while True:
         await _asyncio.sleep(3600)
         try:
-            async with _async_session() as db:
+            async with async_session() as db:
                 n = await prune_expired_sessions(db)
                 if n:
                     logger.info(f"Pruned {n} expired session(s)")

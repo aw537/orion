@@ -1,4 +1,3 @@
-import json
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy import select, update, func
@@ -21,7 +20,7 @@ router = APIRouter(prefix="/api/v1", tags=["stardust"])
 
 
 def _stardust_to_response(s: Stardust) -> StardustResponse:
-    tags = json.loads(s.context_tags) if isinstance(s.context_tags, str) else s.context_tags
+    tags = s.context_tags
     return StardustResponse(
         id=s.id, biome_id=s.biome_id, planet_id=s.planet_id, galaxy_id=s.galaxy_id,
         content=s.content, region=s.region, gravity=s.gravity, confidence=s.confidence,

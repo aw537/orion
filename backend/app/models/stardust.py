@@ -36,6 +36,8 @@ class Stardust(Base):
             return []
         if isinstance(self._context_tags, list):
             return self._context_tags
+        # Fallback: rows written before the column was changed from Text→JSON
+        # may still contain a raw JSON string. Safe to remove once all rows are migrated.
         try:
             import json
             return json.loads(self._context_tags)

@@ -75,3 +75,17 @@ class TestDeadCodeRemoved:
         from app import models
         assert not hasattr(models, "Subagent")
         assert not hasattr(models, "SubagentSession")
+
+
+class TestStardustContextTagsNoDoubleparse:
+    def test_stardust_to_response_uses_hybrid_property_directly(self):
+        """_stardust_to_response must not re-parse tags; hybrid_property already returns list."""
+        import ast, inspect
+        from app.api import stardust as api_mod
+        src = inspect.getsource(api_mod._stardust_to_response)
+        tree = ast.parse(src)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                func = node.func
+                name = func.attr if isinstance(func, ast.Attribute) else (func.id if isinstance(func, ast.Name) else "")
+                assert name != "loads", "json.loads() found inside _stardust_to_response — remove it"
