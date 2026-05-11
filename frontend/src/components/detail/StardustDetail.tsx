@@ -15,6 +15,7 @@ export default function StardustDetail({ stardustId, onClose }: Props) {
   const { data: sd } = useStardust(stardustId);
   const [editing, setEditing] = useState(false);
   const [content, setContent] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const qc = useQueryClient();
 
   React.useEffect(() => { if (sd) setContent(sd.content); }, [sd]);
@@ -25,12 +26,13 @@ export default function StardustDetail({ stardustId, onClose }: Props) {
   const confColor = sd.confidence >= 0.8 ? '#34D399' : sd.confidence >= 0.5 ? '#F59E0B' : '#9CA3AF';
 
   const handleSave = async () => {
+    setError(null);
     try {
       await apiClient.put(`/api/v1/stardust/${stardustId}`, { content });
       qc.invalidateQueries({ queryKey: ['stardust', stardustId] });
       setEditing(false);
     } catch (err) {
-      console.error('Stardust save failed:', err);
+      setError((err as Error).message || 'Failed to save. Please try again.');
     }
   };
 
@@ -79,10 +81,11 @@ export default function StardustDetail({ stardustId, onClose }: Props) {
             readOnly={!editing}
             className={`w-full min-h-[220px] font-body text-sm leading-[1.7] text-[var(--text-1)] bg-transparent border rounded-md p-1.5 -m-1.5 resize-none outline-none transition-all duration-150 ${editing ? 'border-[rgba(245,158,11,0.4)] bg-[rgba(245,158,11,0.05)]' : 'border-transparent'}`}
           />
+          {error && <p className="text-xs text-red-400 mt-3">{error}</p>}
           {editing && (
             <div className="flex gap-2.5 items-center mt-4">
               <Button variant="primary" onClick={handleSave}>Save changes</Button>
-              <Button variant="ghost" onClick={() => { setEditing(false); setContent(sd.content); }}>Cancel</Button>
+              <Button variant="ghost" onClick={() => { setEditing(false); setContent(sd.content); setError(null); }}>Cancel</Button>
               <span className="text-[11px] text-[var(--text-3)]">Edits create a HUMAN_EDIT log entry.</span>
             </div>
           )}

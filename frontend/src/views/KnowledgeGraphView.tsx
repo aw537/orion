@@ -38,6 +38,7 @@ export default function KnowledgeGraphView() {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [linking, setLinking] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearchQuery(searchQuery), 300);
@@ -157,7 +158,8 @@ export default function KnowledgeGraphView() {
 
   const handleLinkAll = async (entityId: string) => {
     setLinking(entityId);
-    try { await linkAll(entityId); } catch { /* noop */ } finally { setLinking(null); }
+    setLinkError(null);
+    try { await linkAll(entityId); } catch (err) { setLinkError((err as Error).message || 'Link failed'); } finally { setLinking(null); }
   };
 
   if (isLoading) return <div className="flex items-center justify-center h-screen text-[var(--text-3)]">Loading graph…</div>;
@@ -229,6 +231,7 @@ export default function KnowledgeGraphView() {
                 </button>
               </div>
             ))}
+            {linkError && <p className="text-[9px] text-red-400 mt-1">{linkError}</p>}
           </div>
         )}
       </aside>

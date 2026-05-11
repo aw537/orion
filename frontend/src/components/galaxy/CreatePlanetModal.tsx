@@ -10,6 +10,7 @@ interface Props { open: boolean; onClose: () => void }
 export default function CreatePlanetModal({ open, onClose }: Props) {
   const [name, setName] = useState('');
   const [color, setColor] = useState(SWATCHES[0]);
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
 
@@ -21,13 +22,14 @@ export default function CreatePlanetModal({ open, onClose }: Props) {
 
   const handleCreate = async () => {
     if (!name.trim()) return;
+    setError(null);
     try {
       await apiClient.post('/api/v1/planets', { name: name.trim(), color });
       qc.invalidateQueries({ queryKey: ['galaxy'] });
       onClose();
       setName('');
     } catch (err) {
-      console.error('Planet creation failed:', err);
+      setError((err as Error).message || 'Failed to create planet. Please try again.');
     }
   };
 
@@ -80,6 +82,7 @@ export default function CreatePlanetModal({ open, onClose }: Props) {
           </div>
         </div>
 
+        {error && <p className="text-xs text-red-400 mt-3">{error}</p>}
         <div className="flex justify-end gap-2.5 mt-5">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button variant="primary" onClick={handleCreate}>Add to Galaxy</Button>

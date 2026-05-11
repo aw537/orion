@@ -9,13 +9,15 @@ export default function SunPanel({ open, onClose }: Props) {
   const { data: strength } = useGalaxyStrength();
   const { data: status } = useGalaxyStatus();
   const [auditRunning, setAuditRunning] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
 
   const runAudit = async () => {
     setAuditRunning(true);
+    setAuditError(null);
     try {
       await apiClient.post('/api/v1/audit/run');
     } catch (err) {
-      console.error('Audit run failed:', err);
+      setAuditError((err as Error).message || 'Audit failed. Please try again.');
     } finally {
       setAuditRunning(false);
     }
@@ -115,6 +117,7 @@ export default function SunPanel({ open, onClose }: Props) {
 
         <div className="flex flex-col gap-2 mt-5">
           <Button variant="secondary" onClick={runAudit} disabled={auditRunning}>{auditRunning ? 'Running...' : 'Run audit now'}</Button>
+          {auditError && <p className="text-xs text-red-400">{auditError}</p>}
           <Button variant="ghost" onClick={() => alert('Export Galaxy snapshot coming soon')}>Export Galaxy snapshot</Button>
         </div>
       </div>

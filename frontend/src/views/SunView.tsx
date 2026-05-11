@@ -15,29 +15,44 @@ export default function SunView() {
   const [tab, setTab] = useState<string>('identity');
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
+  const [editError, setEditError] = useState<string | null>(null);
   const [inlineInput, setInlineInput] = useState('');
   const [inlineMode, setInlineMode] = useState<'blocker' | 'decision' | null>(null);
+  const [inlineError, setInlineError] = useState<string | null>(null);
 
   if (isLoading || !sun) return <div className="flex items-center justify-center h-screen text-[var(--text-3)]">Loading Sun...</div>;
 
   const content = sun[tab] || {};
 
-  const startEdit = () => { setEditValue(JSON.stringify(content, null, 2)); setEditing(true); };
-  const saveEdit = () => {
+  const startEdit = () => { setEditValue(JSON.stringify(content, null, 2)); setEditing(true); setEditError(null); };
+  const saveEdit = async () => {
+    setEditError(null);
+    let parsed: unknown;
     try {
-      updateSection.mutate({ key: tab, content: JSON.parse(editValue), summary: `Edited ${tab}` });
+      parsed = JSON.parse(editValue);
+    } catch {
+      setEditError('Invalid JSON — please fix before saving.');
+      return;
+    }
+    try {
+      await updateSection.mutateAsync({ key: tab, content: parsed, summary: `Edited ${tab}` });
       setEditing(false);
     } catch (err) {
-      console.error('Sun section save failed:', err);
+      setEditError((err as Error).message || 'Save failed. Please try again.');
     }
   };
 
-  const submitInline = () => {
+  const submitInline = async () => {
     if (!inlineInput.trim()) return;
-    if (inlineMode === 'blocker') addBlocker.mutate(inlineInput);
-    else if (inlineMode === 'decision') addDecision.mutate({ decision: inlineInput });
-    setInlineInput('');
-    setInlineMode(null);
+    setInlineError(null);
+    try {
+      if (inlineMode === 'blocker') await addBlocker.mutateAsync(inlineInput);
+      else if (inlineMode === 'decision') await addDecision.mutateAsync({ decision: inlineInput });
+      setInlineInput('');
+      setInlineMode(null);
+    } catch (err) {
+      setInlineError((err as Error).message || 'Failed to add. Please try again.');
+    }
   };
 
   return (
@@ -69,12 +84,18 @@ export default function SunView() {
               <div>
                 <textarea value={editValue} onChange={e => setEditValue(e.target.value)} rows={20}
                   className="w-full p-4 rounded-lg bg-[var(--surface-3)] border border-[var(--border-soft)] font-mono text-[13px] text-[var(--text-1)] outline-none focus:border-[var(--violet-300)] transition-colors duration-150" />
+                {editError && <p className="text-xs text-red-400 mt-2">{editError}</p>}
                 <div className="flex gap-2 mt-4">
-                  <Button variant="primary" onClick={() => {
-                    updateSection.mutate({ key: 'steering_doc', content: { ...content, markdown: editValue }, summary: 'Edited steering doc' });
-                    setEditing(false);
+                  <Button variant="primary" onClick={async () => {
+                    setEditError(null);
+                    try {
+                      await updateSection.mutateAsync({ key: 'steering_doc', content: { ...content, markdown: editValue }, summary: 'Edited steering doc' });
+                      setEditing(false);
+                    } catch (err) {
+                      setEditError((err as Error).message || 'Save failed. Please try again.');
+                    }
                   }}>Save</Button>
-                  <Button variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
+                  <Button variant="ghost" onClick={() => { setEditing(false); setEditError(null); }}>Cancel</Button>
                 </div>
               </div>
             ) : (
@@ -110,9 +131,10 @@ export default function SunView() {
             <div>
               <textarea value={editValue} onChange={e => setEditValue(e.target.value)} rows={16}
                 className="w-full p-4 rounded-lg bg-[var(--surface-3)] border border-[var(--border-soft)] font-mono text-[13px] text-[var(--text-1)] outline-none focus:border-[var(--violet-300)] transition-colors duration-150" />
+              {editError && <p className="text-xs text-red-400 mt-2">{editError}</p>}
               <div className="flex gap-2 mt-4">
                 <Button variant="primary" onClick={saveEdit}>Save</Button>
-                <Button variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
+                <Button variant="ghost" onClick={() => { setEditing(false); setEditError(null); }}>Cancel</Button>
               </div>
             </div>
           ) : (
@@ -138,12 +160,15 @@ export default function SunView() {
               )}
 
               {inlineMode && (
-                <div className="mt-3 flex gap-2">
-                  <input value={inlineInput} onChange={e => setInlineInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && submitInline()}
-                    placeholder={inlineMode === 'blocker' ? 'New blocker...' : 'New decision...'} autoFocus
-                    className="flex-1 h-9 px-3 rounded-lg bg-[var(--surface-3)] border border-[var(--border-soft)] text-[var(--text-1)] font-body text-[13px] outline-none focus:border-[var(--violet-300)] transition-colors duration-150 placeholder:text-[var(--text-3)]" />
-                  <Button variant="primary" onClick={submitInline}>Add</Button>
-                  <Button variant="ghost" onClick={() => setInlineMode(null)} aria-label="Close">×</Button>
+                <div className="mt-3 flex flex-col gap-1.5">
+                  <div className="flex gap-2">
+                    <input value={inlineInput} onChange={e => setInlineInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && submitInline()}
+                      placeholder={inlineMode === 'blocker' ? 'New blocker...' : 'New decision...'} autoFocus
+                      className="flex-1 h-9 px-3 rounded-lg bg-[var(--surface-3)] border border-[var(--border-soft)] text-[var(--text-1)] font-body text-[13px] outline-none focus:border-[var(--violet-300)] transition-colors duration-150 placeholder:text-[var(--text-3)]" />
+                    <Button variant="primary" onClick={submitInline}>Add</Button>
+                    <Button variant="ghost" onClick={() => { setInlineMode(null); setInlineError(null); }} aria-label="Close">×</Button>
+                  </div>
+                  {inlineError && <p className="text-xs text-red-400">{inlineError}</p>}
                 </div>
               )}
 
