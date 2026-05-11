@@ -21,9 +21,13 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 
 async def get_or_create_inbox_planet(galaxy_id: str, db: AsyncSession) -> Planet:
-    """Get or create the Inbox Planet and its inbox Biome for a Galaxy."""
+    """Get or create the Inbox Planet and its inbox Biome for a Galaxy.
+
+    Uses SELECT FOR UPDATE to prevent concurrent inserts of duplicate inbox planets.
+    The partial unique index on (galaxy_id) WHERE planet_type='inbox' is the DB-level guard.
+    """
     planet = (await db.execute(
-        select(Planet).where(Planet.galaxy_id == galaxy_id, Planet.planet_type == "inbox")
+        select(Planet).where(Planet.galaxy_id == galaxy_id, Planet.planet_type == "inbox").with_for_update()
     )).scalar_one_or_none()
     if not planet:
         planet_id = str(uuid.uuid4())
