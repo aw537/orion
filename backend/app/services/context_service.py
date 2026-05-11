@@ -43,7 +43,15 @@ async def build_context(
         sections = (await db.execute(select(SunSection).where(SunSection.galaxy_id == galaxy_id))).scalars().all()
         sun_data = {}
         for s in sections:
-            sun_data[s.section_key] = s.content if isinstance(s.content, dict) else (json.loads(s.content) if s.content else {})
+            if isinstance(s.content, dict):
+                sun_data[s.section_key] = s.content
+            elif s.content:
+                try:
+                    sun_data[s.section_key] = json.loads(s.content)
+                except json.JSONDecodeError:
+                    sun_data[s.section_key] = {}
+            else:
+                sun_data[s.section_key] = {}
         sun_context = {
             "core_values": sun_data.get("values", []),
             "agent_protocol": sun_data.get("agent_protocol", []),
