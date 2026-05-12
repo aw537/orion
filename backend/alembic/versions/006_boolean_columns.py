@@ -15,46 +15,30 @@ depends_on = None
 
 
 def upgrade():
-    op.alter_column(
-        "transition_orientations", "used",
-        existing_type=sa.Integer(),
-        type_=sa.Boolean(),
-        existing_nullable=False,
-        postgresql_using="used::boolean",
-    )
-    op.alter_column(
-        "entity_relationships", "inferred",
-        existing_type=sa.Integer(),
-        type_=sa.Boolean(),
-        existing_nullable=False,
-        postgresql_using="inferred::boolean",
-    )
-    op.alter_column(
-        "contradictions", "human_reviewed",
-        existing_type=sa.Integer(),
-        type_=sa.Boolean(),
-        existing_nullable=False,
-        postgresql_using="human_reviewed::boolean",
-    )
-    op.alter_column(
-        "model_profiles", "is_builtin",
-        existing_type=sa.Integer(),
-        type_=sa.Boolean(),
-        existing_nullable=False,
-        postgresql_using="is_builtin::boolean",
-    )
-    op.alter_column(
-        "interaction_log", "personal_data",
-        existing_type=sa.Integer(),
-        type_=sa.Boolean(),
-        existing_nullable=False,
-        postgresql_using="personal_data::boolean",
-    )
+    # PostgreSQL cannot auto-cast integer server defaults to boolean during ALTER COLUMN TYPE.
+    # Must explicitly drop the default, change type, then restore a boolean default.
+    _bool_cols = [
+        ("transition_orientations", "used", "false"),
+        ("entity_relationships", "inferred", "false"),
+        ("contradictions", "human_reviewed", "false"),
+        ("model_profiles", "is_builtin", "true"),
+        ("interaction_log", "personal_data", "false"),
+    ]
+    for table, col, default in _bool_cols:
+        op.execute(f"ALTER TABLE {table} ALTER COLUMN {col} DROP DEFAULT")
+        op.execute(f"ALTER TABLE {table} ALTER COLUMN {col} TYPE BOOLEAN USING {col}::boolean")
+        op.execute(f"ALTER TABLE {table} ALTER COLUMN {col} SET DEFAULT {default}")
 
 
 def downgrade():
-    op.alter_column("interaction_log", "personal_data", existing_type=sa.Boolean(), type_=sa.Integer(), existing_nullable=False)
-    op.alter_column("model_profiles", "is_builtin", existing_type=sa.Boolean(), type_=sa.Integer(), existing_nullable=False)
-    op.alter_column("contradictions", "human_reviewed", existing_type=sa.Boolean(), type_=sa.Integer(), existing_nullable=False)
-    op.alter_column("entity_relationships", "inferred", existing_type=sa.Boolean(), type_=sa.Integer(), existing_nullable=False)
-    op.alter_column("transition_orientations", "used", existing_type=sa.Boolean(), type_=sa.Integer(), existing_nullable=False)
+    _int_cols = [
+        ("interaction_log", "personal_data", "0"),
+        ("model_profiles", "is_builtin", "1"),
+        ("contradictions", "human_reviewed", "0"),
+        ("entity_relationships", "inferred", "0"),
+        ("transition_orientations", "used", "0"),
+    ]
+    for table, col, default in _int_cols:
+        op.execute(f"ALTER TABLE {table} ALTER COLUMN {col} DROP DEFAULT")
+        op.execute(f"ALTER TABLE {table} ALTER COLUMN {col} TYPE INTEGER USING {col}::integer")
+        op.execute(f"ALTER TABLE {table} ALTER COLUMN {col} SET DEFAULT {default}")
