@@ -21,8 +21,8 @@ export default function InboxView() {
     const newUploads: FileUpload[] = files.map(f => ({ file: f, status: 'pending' }));
     setUploads(prev => [...newUploads, ...prev]);
 
-    files.forEach((file, idx) => {
-      setUploads(prev => prev.map((u, i) => i === idx ? { ...u, status: 'uploading' } : u));
+    files.forEach((file) => {
+      setUploads(prev => prev.map(u => u.file === file ? { ...u, status: 'uploading' } : u));
       upload.mutateAsync(file).then(result => {
         setUploads(prev => prev.map(u => u.file === file ? { ...u, status: 'done', result } : u));
       }).catch(err => {

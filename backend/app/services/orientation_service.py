@@ -80,7 +80,7 @@ class OrientationService:
         # Transition brief if model switched
         transition = await self._get_pending_transition(agent_identity.id, db)
         if transition:
-            transition.used = 1
+            transition.used = True
             await db.commit()
 
         # Lessons — self-correcting loop
@@ -146,7 +146,7 @@ class OrientationService:
     async def _get_pending_transition(self, agent_identity_id: str, db: AsyncSession) -> TransitionOrientation | None:
         result = await db.execute(
             select(TransitionOrientation)
-            .where(TransitionOrientation.agent_identity_id == agent_identity_id, TransitionOrientation.used == 0)
+            .where(TransitionOrientation.agent_identity_id == agent_identity_id, TransitionOrientation.used == False)
             .order_by(desc(TransitionOrientation.generated_at))
             .limit(1)
         )

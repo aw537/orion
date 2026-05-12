@@ -31,8 +31,14 @@ async def get_cache_stats(galaxy: Galaxy = Depends(get_galaxy_for_user)):
     try:
         redis = await get_redis()
         for r in regions:
-            keys = await redis.keys(f"orion:{galaxy.id}:{r}:*")
-            stats[r] = {"keys": len(keys)}
+            count = 0
+            cursor = 0
+            while True:
+                cursor, batch = await redis.scan(cursor, match=f"orion:{galaxy.id}:{r}:*", count=100)
+                count += len(batch)
+                if cursor == 0:
+                    break
+            stats[r] = {"keys": count}
     except Exception:
         stats = {r: {"keys": 0} for r in regions}
     return stats

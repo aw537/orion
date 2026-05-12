@@ -17,7 +17,7 @@ def _create_task(coro) -> None:
         loop = asyncio.get_running_loop()
         loop.create_task(coro)
     except RuntimeError:
-        pass  # no running event loop — skip background logging
+        logger.warning("_create_task: no running event loop — skipping background log")
 
 
 @dataclass
@@ -37,11 +37,34 @@ class SessionTracker:
     def __init__(self):
         self._sessions: dict[str, Session] = {}  # keyed by session.id
         self._cleanup_task: asyncio.Task | None = None
+        self._lock = asyncio.Lock()
 
     def _find_by_agent(self, agent: str) -> Session | None:
         """Return the most recently active session for an agent, if any."""
         matches = [s for s in self._sessions.values() if s.agent == agent]
         return max(matches, key=lambda s: s.last_active) if matches else None
+
+    async def _touch_async(self, agent: str, tool_name: str) -> Session:
+        async with self._lock:
+            now = datetime.now(timezone.utc)
+            session = self._find_by_agent(agent)
+            if not session:
+                session = Session(id=str(uuid.uuid4()), agent=agent, started_at=now, last_active=now)
+                self._sessions[session.id] = session
+                logger.info(f"Session started: {session.id} agent={agent}")
+                _create_task(self._log_start(session))
+            session.last_active = now
+            session.tools_called.append(tool_name)
+            if tool_name in _READ_TOOLS:
+                session.reads += 1
+            elif tool_name in _WRITE_TOOLS:
+                session.writes += 1
+            if self._cleanup_task is None or self._cleanup_task.done():
+                try:
+                    self._cleanup_task = asyncio.get_running_loop().create_task(self._idle_loop())
+                except RuntimeError:
+                    pass
+            return session
 
     def touch(self, agent: str, tool_name: str) -> Session:
         now = datetime.now(timezone.utc)
@@ -57,7 +80,6 @@ class SessionTracker:
             session.reads += 1
         elif tool_name in _WRITE_TOOLS:
             session.writes += 1
-        # Start idle cleanup loop
         if self._cleanup_task is None or self._cleanup_task.done():
             try:
                 self._cleanup_task = asyncio.get_running_loop().create_task(self._idle_loop())
@@ -118,7 +140,7 @@ class SessionTracker:
                 initiated_by=session.agent, session_id=session.id,
             )
         except Exception as e:
-            logger.debug(f"Failed to log session start: {e}")
+            logger.warning(f"Failed to log session start: {e}")
 
     async def _log_end(self, session: Session, summary: str):
         try:
@@ -134,13 +156,13 @@ class SessionTracker:
                 }),
             )
         except Exception as e:
-            logger.debug(f"Failed to log session end: {e}")
+            logger.warning(f"Failed to log session end: {e}")
 
 
 _READ_TOOLS = {
     "memory.search", "memory.context", "memory.entity_get", "memory.status",
     "brain.orient", "brain.recall", "brain.health", "brain.know",
-    "brain.graph_query", "brain.find_path", "brain.ask", "sun.read",
+    "brain.graph_query", "brain.find_path", "brain.ask", "brain.diff", "sun.read",
 }
 _WRITE_TOOLS = {
     "memory.write", "brain.think", "brain.calibrate",

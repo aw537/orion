@@ -65,8 +65,8 @@ export default function NebulaDrawer({ open, onClose }: Props) {
           <span className="w-2 h-2 rounded-full bg-[#34D399] shadow-[0_0_8px_#34D399] animate-[pulse-dot_2s_ease-in-out_infinite]" />
           Nebula · live activity
         </h2>
-        <button onClick={onClose} className="w-8 h-8 rounded-full bg-transparent border border-[var(--border-soft)] text-[var(--text-2)] flex items-center justify-center hover:text-[var(--text-1)] hover:border-[var(--border)]">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        <button onClick={onClose} aria-label="Close" className="w-8 h-8 rounded-full bg-transparent border border-[var(--border-soft)] text-[var(--text-2)] flex items-center justify-center hover:text-[var(--text-1)] hover:border-[var(--border)]">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
       <div className="flex-1 overflow-y-auto py-2">

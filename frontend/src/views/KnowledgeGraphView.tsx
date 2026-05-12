@@ -36,7 +36,14 @@ export default function KnowledgeGraphView() {
   const [hoveredEntity, setHoveredEntity] = useState<SimNode | null>(null);
   const [activePlanets, setActivePlanets] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [linking, setLinking] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearchQuery(searchQuery), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
 
   const { data: neighborhood } = useEntityNeighborhood(selectedEntity);
 
@@ -63,7 +70,7 @@ export default function KnowledgeGraphView() {
     const showAll = activePlanets.size === 0;
     const visibleEntities = graph.entities.filter(e =>
       (showAll || (e.planet_id && activePlanets.has(e.planet_id))) &&
-      (!searchQuery || e.name.toLowerCase().includes(searchQuery.toLowerCase()))
+      (!debouncedSearchQuery || e.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()))
     );
     const visibleIds = new Set(visibleEntities.map(e => e.id));
     const visibleEdges = graph.edges.filter(e => visibleIds.has(e.source as string) && visibleIds.has(e.target as string));
@@ -147,11 +154,12 @@ export default function KnowledgeGraphView() {
     svg.call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2).scale(0.8).translate(-width / 2, -height / 2));
 
     return () => { simulation.stop(); };
-  }, [graph, activePlanets, searchQuery, selectedEntity, neighborhood]);
+  }, [graph, activePlanets, debouncedSearchQuery, selectedEntity, neighborhood]);
 
   const handleLinkAll = async (entityId: string) => {
     setLinking(entityId);
-    try { await linkAll(entityId); } catch { /* noop */ } finally { setLinking(null); }
+    setLinkError(null);
+    try { await linkAll(entityId); } catch (err) { setLinkError((err as Error).message || 'Link failed'); } finally { setLinking(null); }
   };
 
   if (isLoading) return <div className="flex items-center justify-center h-screen text-[var(--text-3)]">Loading graph…</div>;
@@ -223,6 +231,7 @@ export default function KnowledgeGraphView() {
                 </button>
               </div>
             ))}
+            {linkError && <p className="text-[9px] text-red-400 mt-1">{linkError}</p>}
           </div>
         )}
       </aside>

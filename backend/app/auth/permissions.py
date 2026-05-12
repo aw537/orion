@@ -50,7 +50,7 @@ class PermissionChecker:
     ) -> None:
         """Raise 403 if user cannot access the Planet."""
         if not await self.can_access_planet(user, planet_id, action, db):
-            raise HTTPException(403, f"Access denied to Planet. Role: {user.role}.")
+            raise HTTPException(403, "Access denied.")
 
     async def _log(
         self, user_id: str, resource_type: str, resource_id: str,

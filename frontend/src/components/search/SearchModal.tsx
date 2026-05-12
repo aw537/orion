@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../../api/client';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface Props { onClose: () => void; onSynthesize?: (topic: string) => void }
 
@@ -18,6 +19,7 @@ export default function SearchModal({ onClose, onSynthesize }: Props) {
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const trapRef = useFocusTrap<HTMLDivElement>(true);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
@@ -49,8 +51,9 @@ export default function SearchModal({ onClose, onSynthesize }: Props) {
     if (!q.trim()) return text;
     const re = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
     const parts = text.split(re);
+    const tester = new RegExp(re.source, 'i');
     return parts.map((part, i) =>
-      re.test(part) ? <mark key={i} className="bg-[rgba(245,158,11,0.22)] text-[#FCD34D] px-0.5 rounded-sm">{part}</mark> : part
+      tester.test(part) ? <mark key={i} className="bg-[rgba(245,158,11,0.22)] text-[#FCD34D] px-0.5 rounded-sm">{part}</mark> : part
     );
   }
 
@@ -60,7 +63,7 @@ export default function SearchModal({ onClose, onSynthesize }: Props) {
       <div className="absolute inset-0 bg-[rgba(7,4,26,0.85)] backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative w-[720px] max-w-[90vw] bg-[rgba(7,4,26,0.96)] border border-[var(--border)] rounded-[14px] shadow-[0_40px_80px_rgba(0,0,0,0.6),0_0_0_1px_rgba(124,58,237,0.15)_inset] overflow-hidden backdrop-blur-[20px] animate-[rise_320ms_ease-expo]" onKeyDown={handleKey}>
+      <div ref={trapRef} className="relative w-[720px] max-w-[90vw] bg-[rgba(7,4,26,0.96)] border border-[var(--border)] rounded-[14px] shadow-[0_40px_80px_rgba(0,0,0,0.6),0_0_0_1px_rgba(124,58,237,0.15)_inset] overflow-hidden backdrop-blur-[20px] animate-[rise_320ms_ease-expo]" onKeyDown={handleKey} role="dialog" aria-modal="true" aria-label="Search">
         {/* Search bar */}
         <div className="flex items-center gap-3.5 px-5 py-4 border-b border-[var(--border-soft)]">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.5"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>

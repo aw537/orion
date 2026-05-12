@@ -65,7 +65,7 @@ class ContradictionService:
 
         contradiction.resolved_at = now
         contradiction.resolved_by = resolved_by
-        contradiction.human_reviewed = 1
+        contradiction.human_reviewed = True
 
         # Log to Nebula inside transaction so it's atomic with the resolution
         try:

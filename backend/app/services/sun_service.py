@@ -324,6 +324,9 @@ async def reimport_steering_doc(galaxy_id: str, db: AsyncSession) -> dict:
     if not source_path:
         raise ValueError("No source_path stored — this steering doc was not imported from a file")
     resolved = os.path.realpath(os.path.expanduser(source_path))
+    from app.api.onboarding import _is_safe_path
+    if not _is_safe_path(resolved):
+        raise ValueError("Source path is outside allowed directories")
     if not os.path.isfile(resolved):
         raise ValueError(f"File not found: {resolved}")
     with open(resolved, "r", encoding="utf-8") as f:

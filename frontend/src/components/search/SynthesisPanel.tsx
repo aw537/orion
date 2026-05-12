@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { apiClient } from '../../api/client';
 import { ConfirmDialog } from '../ui';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface SynthesisResult {
   topic: string; current_understanding: string; key_decisions: string[];
@@ -15,6 +16,7 @@ export default function SynthesisPanel({ open, onClose, initialTopic }: Props) {
   const [topic, setTopic] = useState(initialTopic || '');
   const [result, setResult] = useState<SynthesisResult | null>(null);
   const [confirmRefresh, setConfirmRefresh] = useState(false);
+  const trapRef = useFocusTrap<HTMLDivElement>(open);
 
   const synthesize = useMutation({
     mutationFn: (t: string) => apiClient.post<SynthesisResult>('/api/v1/synthesize', { topic: t }),
@@ -34,7 +36,7 @@ export default function SynthesisPanel({ open, onClose, initialTopic }: Props) {
   return (
     <div className="absolute inset-0 z-[20] flex items-center justify-center" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="absolute inset-0 bg-[rgba(7,4,26,0.85)] backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-[680px] max-w-[90vw] max-h-[80vh] bg-[rgba(7,4,26,0.96)] border border-[var(--border)] rounded-[14px] shadow-[0_40px_80px_rgba(0,0,0,0.6)] overflow-hidden flex flex-col">
+      <div ref={trapRef} className="relative w-[680px] max-w-[90vw] max-h-[80vh] bg-[rgba(7,4,26,0.96)] border border-[var(--border)] rounded-[14px] shadow-[0_40px_80px_rgba(0,0,0,0.6)] overflow-hidden flex flex-col" role="dialog" aria-modal="true" aria-label="Synthesize knowledge">
         {/* Header */}
         <div className="flex items-center gap-3.5 px-5 py-4 border-b border-[var(--border-soft)]">
           <span className="text-lg"></span>

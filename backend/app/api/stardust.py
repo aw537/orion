@@ -1,10 +1,14 @@
-import json
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from sqlalchemy import select, update, func
+from sqlalchemy import select, update, func, case
+from sqlalchemy import delete as sql_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Galaxy, Stardust, Biome, Planet
+from app.models import (
+    EntityStardust, EntityTimeline, StardustRelationship,
+    EntityBacklink, RoutingLog, KnowledgeIntegrationLog,
+)
 from app.auth.dependencies import get_galaxy_for_user
 from app.schemas.stardust import StardustCreate, StardustResponse, StardustUpdate, WriteReceipt, PaginatedResponse
 from app.services import stardust_service, nebula_service
@@ -21,7 +25,7 @@ router = APIRouter(prefix="/api/v1", tags=["stardust"])
 
 
 def _stardust_to_response(s: Stardust) -> StardustResponse:
-    tags = json.loads(s.context_tags) if isinstance(s.context_tags, str) else s.context_tags
+    tags = s.context_tags
     return StardustResponse(
         id=s.id, biome_id=s.biome_id, planet_id=s.planet_id, galaxy_id=s.galaxy_id,
         content=s.content, region=s.region, gravity=s.gravity, confidence=s.confidence,
@@ -33,7 +37,10 @@ def _stardust_to_response(s: Stardust) -> StardustResponse:
 
 
 @router.get("/biomes/{biome_id}/stardust")
-async def list_stardust(biome_id: str, limit: int = 50, offset: int = 0, db: AsyncSession = Depends(get_db)):
+async def list_stardust(biome_id: str, limit: int = 50, offset: int = 0, galaxy: Galaxy = Depends(get_galaxy_for_user), db: AsyncSession = Depends(get_db)):
+    biome = (await db.execute(select(Biome).where(Biome.id == biome_id))).scalar_one_or_none()
+    if not biome or biome.galaxy_id != galaxy.id:
+        raise HTTPException(404, "Biome not found")
     total = (await db.execute(select(func.count()).select_from(Stardust).where(Stardust.biome_id == biome_id))).scalar() or 0
     rows = (await db.execute(select(Stardust).where(Stardust.biome_id == biome_id).order_by(Stardust.created_at.desc()).offset(offset).limit(limit))).scalars().all()
     return PaginatedResponse(items=[_stardust_to_response(s) for s in rows], total=total, offset=offset, limit=limit)
@@ -82,9 +89,9 @@ async def quick_capture(body: QuickCaptureBody, background_tasks: BackgroundTask
 
 
 @router.get("/stardust/{stardust_id}", response_model=StardustResponse)
-async def get_stardust(stardust_id: str, db: AsyncSession = Depends(get_db)):
+async def get_stardust(stardust_id: str, galaxy: Galaxy = Depends(get_galaxy_for_user), db: AsyncSession = Depends(get_db)):
     s = (await db.execute(select(Stardust).where(Stardust.id == stardust_id))).scalar_one_or_none()
-    if not s:
+    if not s or s.galaxy_id != galaxy.id:
         raise HTTPException(404, "Stardust not found")
     await db.execute(update(Stardust).where(Stardust.id == stardust_id).values(last_accessed=datetime.now(timezone.utc).replace(tzinfo=None), access_count=Stardust.access_count + 1))
     await db.commit()
@@ -93,9 +100,9 @@ async def get_stardust(stardust_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/stardust/{stardust_id}", response_model=StardustResponse)
-async def update_stardust(stardust_id: str, body: StardustUpdate, db: AsyncSession = Depends(get_db)):
+async def update_stardust(stardust_id: str, body: StardustUpdate, galaxy: Galaxy = Depends(get_galaxy_for_user), db: AsyncSession = Depends(get_db)):
     s = (await db.execute(select(Stardust).where(Stardust.id == stardust_id))).scalar_one_or_none()
-    if not s:
+    if not s or s.galaxy_id != galaxy.id:
         raise HTTPException(404, "Stardust not found")
     updates = {}
     if body.content is not None:
@@ -112,3 +119,42 @@ async def update_stardust(stardust_id: str, body: StardustUpdate, db: AsyncSessi
         await db.commit()
         await db.refresh(s)
     return _stardust_to_response(s)
+
+
+@router.delete("/stardust/{stardust_id}")
+async def delete_stardust(
+    stardust_id: str,
+    galaxy: Galaxy = Depends(get_galaxy_for_user),
+    db: AsyncSession = Depends(get_db),
+):
+    s = (await db.execute(
+        select(Stardust).where(Stardust.id == stardust_id, Stardust.galaxy_id == galaxy.id)
+    )).scalar_one_or_none()
+    if not s:
+        raise HTTPException(404, "Stardust not found")
+
+    await nebula_service.log_event(
+        galaxy_id=galaxy.id, action_type="DELETE",
+        initiated_by="user", record_id=stardust_id, db=db,
+    )
+    await db.execute(sql_delete(EntityStardust).where(EntityStardust.stardust_id == stardust_id))
+    await db.execute(sql_delete(EntityTimeline).where(EntityTimeline.source_stardust_id == stardust_id))
+    await db.execute(sql_delete(StardustRelationship).where(
+        (StardustRelationship.source_stardust_id == stardust_id) |
+        (StardustRelationship.target_stardust_id == stardust_id)
+    ))
+    await db.execute(sql_delete(EntityBacklink).where(EntityBacklink.stardust_id == stardust_id))
+    await db.execute(sql_delete(RoutingLog).where(RoutingLog.stardust_id == stardust_id))
+    await db.execute(sql_delete(KnowledgeIntegrationLog).where(KnowledgeIntegrationLog.stardust_id == stardust_id))
+    biome_id, planet_id = s.biome_id, s.planet_id
+    await db.delete(s)
+    await db.execute(
+        update(Biome).where(Biome.id == biome_id)
+        .values(stardust_count=case((Biome.stardust_count > 0, Biome.stardust_count - 1), else_=0))
+    )
+    await db.execute(
+        update(Planet).where(Planet.id == planet_id)
+        .values(stardust_count=case((Planet.stardust_count > 0, Planet.stardust_count - 1), else_=0))
+    )
+    await db.commit()
+    return {"status": "deleted", "deleted_id": stardust_id}

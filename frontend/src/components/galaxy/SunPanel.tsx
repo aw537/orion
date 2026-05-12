@@ -9,13 +9,15 @@ export default function SunPanel({ open, onClose }: Props) {
   const { data: strength } = useGalaxyStrength();
   const { data: status } = useGalaxyStatus();
   const [auditRunning, setAuditRunning] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
 
   const runAudit = async () => {
     setAuditRunning(true);
+    setAuditError(null);
     try {
       await apiClient.post('/api/v1/audit/run');
     } catch (err) {
-      console.error('Audit run failed:', err);
+      setAuditError((err as Error).message || 'Audit failed. Please try again.');
     } finally {
       setAuditRunning(false);
     }
@@ -47,9 +49,10 @@ export default function SunPanel({ open, onClose }: Props) {
         </div>
         <button
           onClick={onClose}
+          aria-label="Close"
           className="w-8 h-8 rounded-full border border-[var(--border-soft)] bg-transparent text-[var(--text-2)] flex items-center justify-center hover:text-[var(--text-1)] hover:border-[var(--border)] transition-colors duration-150 flex-shrink-0"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </header>
 
@@ -115,6 +118,7 @@ export default function SunPanel({ open, onClose }: Props) {
 
         <div className="flex flex-col gap-2 mt-5">
           <Button variant="secondary" onClick={runAudit} disabled={auditRunning}>{auditRunning ? 'Running...' : 'Run audit now'}</Button>
+          {auditError && <p className="text-xs text-red-400">{auditError}</p>}
           <Button variant="ghost" onClick={() => alert('Export Galaxy snapshot coming soon')}>Export Galaxy snapshot</Button>
         </div>
       </div>

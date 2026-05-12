@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
+from urllib.parse import urlparse, urlunparse
 from redis.asyncio import Redis
 from app.config import get_settings
 
@@ -11,12 +12,27 @@ _redis: Redis | None = None
 _redis_lock = asyncio.Lock()
 
 
+def _build_redis_url(redis_url: str, password: str) -> str:
+    """Inject a password into a Redis URL if one is configured and the URL has no credentials."""
+    if not password:
+        return redis_url
+    parsed = urlparse(redis_url)
+    if parsed.username or parsed.password:
+        return redis_url  # already has credentials — don't overwrite
+    netloc = f":{password}@{parsed.hostname}"
+    if parsed.port:
+        netloc += f":{parsed.port}"
+    return urlunparse(parsed._replace(netloc=netloc))
+
+
 async def get_redis() -> Redis:
     global _redis
     if _redis is None:
         async with _redis_lock:
             if _redis is None:
-                _redis = Redis.from_url(get_settings().REDIS_URL, decode_responses=True)
+                s = get_settings()
+                url = _build_redis_url(s.REDIS_URL, s.REDIS_PASSWORD)
+                _redis = Redis.from_url(url, decode_responses=True)
     return _redis
 
 
@@ -71,12 +87,15 @@ class RedisClient:
 
     async def get_all_cached_stardust(self, galaxy_id: str, biome_id: str) -> list[dict]:
         ids = await self.get_recent_stardust(galaxy_id, biome_id, limit=100)
-        results = []
-        for sid in ids:
-            data = await self.get_stardust(galaxy_id, biome_id, sid)
-            if data:
-                results.append(data)
-        return results
+        if not ids:
+            return []
+        keys = [self.cache_key(galaxy_id, biome_id, sid) for sid in ids]
+        try:
+            raws = await self.r.mget(*keys)
+            return [json.loads(raw) for raw in raws if raw]
+        except Exception as e:
+            logger.warning(f"Redis get_all_cached_stardust failed (degraded): {e}")
+            return []
 
     # --- Strength ---
     async def set_strength(self, galaxy_id: str, score: float):

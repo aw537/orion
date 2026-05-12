@@ -379,24 +379,29 @@ async def import_markdown_folder(path: str, planet_id: str, galaxy_id: str, max_
     # ── Create stardust graph edges ──
 
     # Rule 1: co-chunk — all chunks from the same source file are connected
+    # Cap at 50 chunks per file to bound O(N²) pair growth (50 chunks → 1225 pairs max)
+    _CO_CHUNK_CAP = 50
     co_chunk_pairs: list[tuple[str, str]] = []
     for ids in stem_to_stardust_ids.values():
-        for i in range(len(ids)):
-            for j in range(i + 1, len(ids)):
-                co_chunk_pairs.append((ids[i], ids[j]))
+        capped = ids[:_CO_CHUNK_CAP]
+        for i in range(len(capped)):
+            for j in range(i + 1, len(capped)):
+                co_chunk_pairs.append((capped[i], capped[j]))
     if co_chunk_pairs:
         logger.info(f"Creating {len(co_chunk_pairs)} co-chunk stardust edges")
         await _bulk_insert_stardust_relationships(galaxy_id, co_chunk_pairs, "co_chunk")
 
     # Rule 2: wikilink — chunks from the referenced file point to chunks in the referencing file
     # e.g. [[wiki]] in file_A.md → edge from each Wiki.md chunk to each file_A.md chunk
+    # Cap each side at 20 chunks to bound cross-product growth (20×20 = 400 pairs per link)
+    _WIKILINK_CAP = 20
     wikilink_pairs: list[tuple[str, str]] = []
     for referencing_stem, target_stems in wikilink_map.items():
-        referencing_ids = stem_to_stardust_ids.get(referencing_stem, [])
+        referencing_ids = stem_to_stardust_ids.get(referencing_stem, [])[:_WIKILINK_CAP]
         if not referencing_ids:
             continue
         for target_stem in target_stems:
-            referenced_ids = stem_to_stardust_ids.get(target_stem, [])
+            referenced_ids = stem_to_stardust_ids.get(target_stem, [])[:_WIKILINK_CAP]
             for ref_id in referenced_ids:
                 for src_id in referencing_ids:
                     wikilink_pairs.append((ref_id, src_id))

@@ -267,3 +267,43 @@ class TestEntitiesAPI:
     async def test_get_entity_not_found(self, client):
         resp = await client.get("/api/v1/entities/nonexistent-id")
         assert resp.status_code == 404
+
+
+# ── Stardust DELETE endpoint ─────────────────────────────────────────────────
+
+class TestStardustDeleteEndpoint:
+    async def _create_stardust(self, client) -> str:
+        """Onboard and write one stardust record; return its ID."""
+        data = await _onboard(client)
+        biome_id = data["first_biome_id"]
+        resp = await client.post(f"/api/v1/biomes/{biome_id}/stardust", json={
+            "content": "test stardust for deletion", "region": "contextual",
+        })
+        assert resp.status_code == 201
+        return resp.json()["stardust_id"]
+
+    @pytest.mark.asyncio
+    async def test_delete_stardust_success(self, client):
+        stardust_id = await self._create_stardust(client)
+        resp = await client.delete(f"/api/v1/stardust/{stardust_id}")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "deleted"
+        assert resp.json()["deleted_id"] == stardust_id
+
+    @pytest.mark.asyncio
+    async def test_delete_stardust_not_found(self, client):
+        await _onboard(client)
+        resp = await client.delete("/api/v1/stardust/nonexistent-id")
+        assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_delete_stardust_no_galaxy(self, client):
+        resp = await client.delete("/api/v1/stardust/some-id")
+        assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_delete_stardust_then_get_returns_404(self, client):
+        stardust_id = await self._create_stardust(client)
+        await client.delete(f"/api/v1/stardust/{stardust_id}")
+        get_resp = await client.get(f"/api/v1/stardust/{stardust_id}")
+        assert get_resp.status_code == 404

@@ -29,6 +29,7 @@ function StardustDetailPage({ stardustId }: { stardustId: string }) {
   const [editing, setEditing] = useState(false);
   const [content, setContent] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const qc = useQueryClient();
   const navigate = useNavigate();
 
@@ -45,16 +46,18 @@ function StardustDetailPage({ stardustId }: { stardustId: string }) {
   const confColor = sd.confidence >= 0.8 ? '#34D399' : sd.confidence >= 0.5 ? '#F59E0B' : '#9CA3AF';
 
   const handleSave = async () => {
+    setError(null);
     try {
       await apiClient.put(`/api/v1/stardust/${stardustId}`, { content });
       qc.invalidateQueries({ queryKey: ['stardust', stardustId] });
       setEditing(false);
     } catch (err) {
-      console.error('Stardust save failed:', err);
+      setError((err as Error).message || 'Failed to save. Please try again.');
     }
   };
 
   const handleDelete = async () => {
+    setError(null);
     try {
       await apiClient.delete(`/api/v1/brain/stardust/${stardustId}`);
       qc.removeQueries({ queryKey: ['stardust', stardustId] });
@@ -62,7 +65,7 @@ function StardustDetailPage({ stardustId }: { stardustId: string }) {
       qc.invalidateQueries({ queryKey: ['planet', sd.planet_id] });
       navigate(-1);
     } catch (err) {
-      console.error('Stardust delete failed:', err);
+      setError((err as Error).message || 'Failed to delete. Please try again.');
       setConfirmDelete(false);
     }
   };
@@ -141,10 +144,11 @@ function StardustDetailPage({ stardustId }: { stardustId: string }) {
               editing ? 'border-[rgba(245,158,11,0.4)] bg-[rgba(245,158,11,0.05)]' : 'border-transparent'
             }`}
           />
+          {error && <p className="text-xs text-red-400 mt-3">{error}</p>}
           {editing && (
             <div className="flex gap-2.5 items-center mt-4">
               <Button variant="primary" onClick={handleSave}>Save changes</Button>
-              <Button variant="ghost" onClick={() => { setEditing(false); setContent(sd.content); }}>Cancel</Button>
+              <Button variant="ghost" onClick={() => { setEditing(false); setContent(sd.content); setError(null); }}>Cancel</Button>
               <span className="text-[11px] text-[var(--text-3)]">Edits create a HUMAN_EDIT log entry.</span>
             </div>
           )}

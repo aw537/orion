@@ -128,9 +128,11 @@ class AgentIdentityService:
 
     def _infer_family(self, model: str) -> str:
         m = model.lower()
-        for f in ["claude", "gpt", "llama", "gemini", "mistral", "qwen", "deepseek"]:
-            if f in m:
-                return f
+        matches = [f for f in ["claude", "gpt", "llama", "gemini", "mistral", "qwen", "deepseek"] if f in m]
+        if len(matches) > 1:
+            logger.warning("Ambiguous model name '%s' matches multiple families: %s — using first match", model, matches)
+        if matches:
+            return matches[0]
         return "custom"
 
 

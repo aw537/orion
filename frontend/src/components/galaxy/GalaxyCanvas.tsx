@@ -62,17 +62,22 @@ export default React.memo(function GalaxyCanvas({ galaxy, onPlanetClick, onSunCl
   }, [focusedIdx]);
 
   useEffect(() => {
+    let cancelled = false;
     apiClient.get<{ agent_name: string }[]>('/api/v1/agents').then(async (agents) => {
+      if (cancelled) return;
       for (const a of agents) {
+        if (cancelled) return;
         try {
           const h = await apiClient.get<{ overall_health: number }>(`/api/v1/agents/${a.agent_name}/health`);
+          if (cancelled) return;
           if (h.overall_health < 0.8) { stateRef.current.brainHealthLow = true; return; }
         } catch (err) {
-          console.error('Agent health check failed:', err);
+          if (!cancelled) console.error('Agent health check failed:', err);
         }
       }
-      stateRef.current.brainHealthLow = false;
-    }).catch((err) => { console.error('Agents fetch failed:', err); });
+      if (!cancelled) stateRef.current.brainHealthLow = false;
+    }).catch((err) => { if (!cancelled) console.error('Agents fetch failed:', err); });
+    return () => { cancelled = true; };
   }, []);
 
   // Init stars + planets

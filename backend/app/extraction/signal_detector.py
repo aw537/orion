@@ -1,27 +1,29 @@
 """Signal detector — infers cognitive region from content keywords."""
+import re
+
+_KEYWORDS: dict[str, list[str]] = {
+    "analytical": ["decided", "because", "tradeoff", "analysis", "evaluated",
+                   "compared", "chosen", "rejected", "reason", "therefore"],
+    "procedural": ["step", "first", "then", "next", "install", "run", "execute",
+                   "how to", "procedure", "process", "workflow", "playbook"],
+    "creative": ["analogy", "metaphor", "creative", "novel", "lateral"],
+    "empathetic": ["feel", "emotion", "relationship", "team", "communication"],
+    "critical": ["fail", "break", "edge case", "assumption", "risk", "vulnerability"],
+    "strategic": ["goal", "long-term", "priority", "roadmap", "strategy", "quarter"],
+}
+
+_PATTERNS: dict[str, list[re.Pattern]] = {
+    region: [re.compile(r"\b" + re.escape(k) + r"\b") for k in keywords]
+    for region, keywords in _KEYWORDS.items()
+}
 
 
 def infer_region_from_content(content: str) -> str:
-    analytical_keywords = ["decided", "because", "tradeoff", "analysis", "evaluated",
-                           "compared", "chosen", "rejected", "reason", "therefore"]
-    procedural_keywords = ["step", "first", "then", "next", "install", "run", "execute",
-                           "how to", "procedure", "process", "workflow", "playbook"]
-    creative_keywords = ["analogy", "metaphor", "creative", "novel", "lateral"]
-    empathetic_keywords = ["feel", "emotion", "relationship", "team", "communication"]
-    critical_keywords = ["fail", "break", "edge case", "assumption", "risk", "vulnerability"]
-    strategic_keywords = ["goal", "long-term", "priority", "roadmap", "strategy", "quarter"]
-
     content_lower = content.lower()
-
     scores = {
-        "analytical": sum(content_lower.count(k) for k in analytical_keywords),
-        "procedural": sum(content_lower.count(k) for k in procedural_keywords),
-        "creative": sum(content_lower.count(k) for k in creative_keywords),
-        "empathetic": sum(content_lower.count(k) for k in empathetic_keywords),
-        "critical": sum(content_lower.count(k) for k in critical_keywords),
-        "strategic": sum(content_lower.count(k) for k in strategic_keywords),
+        region: sum(len(p.findall(content_lower)) for p in patterns)
+        for region, patterns in _PATTERNS.items()
     }
-
     best_region = max(scores, key=scores.get)
     if scores[best_region] > 2:
         return best_region

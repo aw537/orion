@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("orion.mcp")
 
 MCP_PORT = int(os.environ.get("MCP_PORT", "8787"))
-mcp = FastMCP("Orion", host="0.0.0.0", port=MCP_PORT)
+mcp = FastMCP("Orion", host="127.0.0.1", port=MCP_PORT)
 
 
 _DEFAULT_AGENT = "mcp_client"
@@ -64,11 +64,16 @@ async def _wrap(agent: str, tool: str, result: dict, verbose: bool = False) -> d
 
 # ── memory.* (5 tools) ──────────────────────────────────────────────
 
+_MAX_CONTENT_BYTES = 50 * 1024  # 50 KB
+
+
 @mcp.tool(name="memory.write")
 async def memory_write(content: str, planet: str | None = None, biome: str | None = None,
                         region: str = "contextual", context_tags: list[str] | None = None,
                         gravity: str = "BIOME", agent_name: str | None = None) -> dict:
     """Store a piece of knowledge in your Galaxy. Planet is auto-routed if not specified."""
+    if len(content.encode("utf-8")) > _MAX_CONTENT_BYTES:
+        return {"error": f"Content exceeds maximum size of {_MAX_CONTENT_BYTES // 1024}KB"}
     r = await client.memory_write(content, planet, biome, region, context_tags, gravity)
     return await _wrap(_resolve_agent(agent_name), "memory.write", r)
 
@@ -128,6 +133,7 @@ async def brain_think(content: str, planet: str | None = None, biome: str | None
                        scope: str = "BIOME", context_tags: list[str] | None = None,
                        session_id: str | None = None, agent_name: str | None = None) -> dict:
     """Integrate new understanding into your brain. Planet is auto-routed if not specified."""
+    confidence = max(0.0, min(1.0, confidence))
     r = await client.brain_think(content, planet, biome, cognitive_mode, confidence,
                                   reasoning, supersedes, scope, context_tags, session_id, agent_name)
     return await _wrap(_resolve_agent(agent_name), "brain.think", r)
@@ -375,7 +381,10 @@ async def orion_session_end(summary: str = "", agent_name: str | None = None) ->
 @mcp.custom_route("/health", methods=["GET"], include_in_schema=False)
 async def health_check(request):
     from starlette.responses import JSONResponse
-    return JSONResponse({"status": "ok"})
+    r = await client._get("/health")
+    if "error" in r:
+        return JSONResponse({"status": "degraded", "backend": r.get("error")}, status_code=503)
+    return JSONResponse({"status": "ok", "backend": r.get("status", "ok")})
 
 
 def _close_client_sync():
@@ -390,6 +399,8 @@ def _close_client_sync():
 
 
 def main():
+    if not client.API_TOKEN:
+        raise SystemExit("ORION_TOKEN must be set before starting the MCP server")
     atexit.register(_close_client_sync)
     logger.info(f"Starting Orion MCP server on port {MCP_PORT}")
     logger.info(f"Backend API: {client.API_BASE}")

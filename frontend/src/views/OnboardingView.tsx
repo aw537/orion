@@ -95,15 +95,16 @@ export default function OnboardingView() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === 'Enter') { if (step < TOTAL_STEPS) setStep(step + 1); else handleFinish(); }
       else if (e.key === 'ArrowLeft' && step > 1) setStep(step - 1);
       else if (e.key === 'ArrowRight' && step < TOTAL_STEPS) setStep(step + 1);
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [step, role, templateId, source, biomeName, userName, goal, tools, commStyle, contradictionPref, steeringDocPath]);
+  }, [step, role, templateId, source, biomeName, userName, goal, tools, commStyle, contradictionPref, steeringDocPath, handleFinish]);
 
-  const handleFinish = async () => {
+  const handleFinish = useCallback(async () => {
     if (loading) return;
     setLoading(true);
     setLoadingLabel('Creating…');
@@ -148,7 +149,7 @@ export default function OnboardingView() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [loading, role, templateId, biomeName, source, selectedFiles, importPath, userName, goal, tools, commStyle, contradictionPref, steeringDocPath, steeringDocContent, qc, navigate, clearProgress]);
 
   const slug = biomeName ? biomeName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') : 'untitled';
   const nameLen = biomeName.length;
@@ -174,8 +175,9 @@ export default function OnboardingView() {
         {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((s) => (
           <button
             key={s}
-            onClick={() => setStep(s)}
-            className={`px-3 py-1.5 rounded-full text-[11px] font-mono tracking-[0.04em] cursor-pointer border backdrop-blur-sm transition-all duration-150 ${step === s ? 'text-white bg-[var(--violet-700)] border-[var(--violet-700)]' : 'text-[var(--text-3)] bg-[rgba(7,4,26,0.6)] border-[var(--border-soft)] hover:text-[var(--text-1)]'}`}
+            onClick={() => s <= step && setStep(s)}
+            disabled={s > step}
+            className={`px-3 py-1.5 rounded-full text-[11px] font-mono tracking-[0.04em] border backdrop-blur-sm transition-all duration-150 ${step === s ? 'text-white bg-[var(--violet-700)] border-[var(--violet-700)] cursor-pointer' : s < step ? 'text-[var(--text-3)] bg-[rgba(7,4,26,0.6)] border-[var(--border-soft)] hover:text-[var(--text-1)] cursor-pointer' : 'text-[rgba(255,255,255,0.2)] bg-[rgba(7,4,26,0.4)] border-[rgba(255,255,255,0.06)] cursor-not-allowed'}`}
           >
             Step {s}
           </button>

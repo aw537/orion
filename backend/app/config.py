@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     DATABASE_MAX_OVERFLOW: int = 20
     DATABASE_POOL_TIMEOUT: int = 30
     REDIS_URL: str = "redis://localhost:6379"
+    REDIS_PASSWORD: str = ""
+    # TLS: use rediss:// scheme in REDIS_URL for TLS-encrypted connections.
+    # DATABASE_URL: use postgresql+asyncpg://...?ssl=require for TLS to PostgreSQL.
+    # Both are operator responsibilities; the app passes URLs through as-is.
     CHROMA_URL: str = "http://localhost:8001"
     OLLAMA_URL: str = "http://localhost:11434"
 
@@ -32,7 +36,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     ORION_LOCAL_TOKEN: str = ""
     ORION_AUTH_DISABLED: bool = True
-    ORION_OWNER_RECOVERY_TOKEN: str = ""  # when set, allows re-registering an owner
+    ORION_OWNER_RECOVERY_TOKEN: str = ""  # SHA-256 hex digest of the token; allows re-registering an owner
 
     MCP_PORT: int = 8787
     API_PORT: int = 8000
@@ -47,22 +51,19 @@ def get_settings() -> Settings:
     return Settings()
 
 
+def clear_settings_cache() -> None:
+    """Invalidate the lru_cache on get_settings().
+
+    Note: module-level consumers that captured the result at import time
+    (e.g. database.py's engine) are unaffected — intended for test fixtures
+    that import modules fresh.
+    """
+    get_settings.cache_clear()
+
+
 def get_cache_ttl(region: str, biome_override: int | None = None) -> int:
     """Get cache TTL for a region. Biome override wins if set, then config defaults."""
     if biome_override is not None:
         return biome_override
     ttls = get_settings().region_cache_ttls
     return getattr(ttls, region, 14400)
-
-
-# Reference prompts for cognitive region reasoning. Not imported by backend services
-# directly — available for MCP tools and external consumers via config import.
-REGION_REASONING_PROMPTS = {
-    "analytical": "You are reasoning in analytical mode. Draw on accumulated logical frameworks, decision records, and trade-off analyses. Prioritize precision. Ask: what is the most defensible conclusion given all evidence?",
-    "procedural": "You are reasoning in procedural mode. Draw on accumulated playbooks, established patterns, and step-by-step knowledge. Prioritize proven approaches. Ask: what is the established approach validated in this context?",
-    "contextual": "You are reasoning in contextual mode. Draw on accumulated observations, preferences, and general knowledge. Balance recency with established patterns. Ask: what does the accumulated context suggest?",
-    "creative": "You are reasoning in creative mode. Draw on accumulated analogies, lateral connections, and pattern-breaking insights. Prioritize novel framings. Ask: what non-obvious framing reframes this productively?",
-    "empathetic": "You are reasoning in empathetic mode. Draw on accumulated relational context, emotional history, and communication patterns. Prioritize actual needs. Ask: what is this person experiencing and what do they need?",
-    "critical": "You are reasoning in critical mode. Draw on accumulated failure patterns, edge cases, and assumption challenges. Actively look for what breaks. Ask: where does this break down and what assumptions are wrong?",
-    "strategic": "You are reasoning in strategic mode. Draw on long-horizon thinking, goal alignment, and prioritization history. Weigh short-term against long-term. Ask: does this serve the larger goal and what are second-order effects?",
-}

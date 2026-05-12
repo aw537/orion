@@ -5,10 +5,9 @@ from app.models.stardust import Stardust
 from app.models.entity import Entity, EntityStardust, EntityTimeline
 from app.models.nebula import InteractionLog
 from app.models.contradiction import Contradiction
-from app.models.subagent import Subagent, GravityBridge, AuditRun, SchemaVersion
-from app.models.profiles import StrengthHistory, ModelProfile, SubagentSession
+from app.models.subagent import AuditRun, SchemaVersion
+from app.models.profiles import StrengthHistory, ModelProfile
 from app.models.user import User, UserSession, PlanetAccessGrant, PermissionCheck, GalaxyInvite
-from app.models.merge import MergeProposal, EntityMergeMapping
 from app.models.routing_log import RoutingLog
 from app.models.inbox import InboxIngestion
 from app.models.brain import (
@@ -21,10 +20,9 @@ from app.models.brain import (
 __all__ = [
     "Base", "Galaxy", "SunSection", "Planet", "Biome", "Stardust",
     "Entity", "EntityStardust", "EntityTimeline", "InteractionLog",
-    "Contradiction", "Subagent", "GravityBridge", "AuditRun", "SchemaVersion",
-    "StrengthHistory", "ModelProfile", "SubagentSession",
+    "Contradiction", "AuditRun", "SchemaVersion",
+    "StrengthHistory", "ModelProfile",
     "User", "UserSession", "PlanetAccessGrant", "PermissionCheck", "GalaxyInvite",
-    "MergeProposal", "EntityMergeMapping",
     "RoutingLog",
     "InboxIngestion",
     "AgentIdentity", "AgentSession", "AgentExpertise",

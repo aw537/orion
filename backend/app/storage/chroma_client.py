@@ -2,6 +2,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+from urllib.parse import urlparse
 import chromadb
 from app.config import get_settings
 
@@ -17,8 +18,10 @@ def get_chroma_client() -> chromadb.HttpClient:
         with _client_lock:
             if _client is None:
                 settings = get_settings()
-                _client = chromadb.HttpClient(host=settings.CHROMA_URL.replace("http://", "").split(":")[0],
-                                               port=int(settings.CHROMA_URL.split(":")[-1]))
+                parsed = urlparse(settings.CHROMA_URL)
+                host = parsed.hostname or "localhost"
+                port = parsed.port or 8000
+                _client = chromadb.HttpClient(host=host, port=port)
     return _client
 
 

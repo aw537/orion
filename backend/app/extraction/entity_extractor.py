@@ -14,9 +14,9 @@ class ExtractedEntity:
 
 
 def _deduplicate(entities: list[ExtractedEntity]) -> list[ExtractedEntity]:
-    seen: dict[tuple[str, str], ExtractedEntity] = {}
+    seen: dict[str, ExtractedEntity] = {}
     for e in entities:
-        key = (e.name.lower(), e.entity_type)
+        key = e.name.lower()
         if key not in seen:
             seen[key] = e
     return list(seen.values())

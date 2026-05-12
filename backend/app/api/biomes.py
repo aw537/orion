@@ -27,7 +27,8 @@ async def create_biome(planet_id: str, body: BiomeCreate, user: User = Depends(g
     if not planet:
         raise HTTPException(404, "Planet not found")
     biome_id = str(uuid.uuid4())
-    await db.execute(insert(Biome).values(id=biome_id, planet_id=planet_id, galaxy_id=planet.galaxy_id, name=body.name, description=body.description))
+    ttl_kw = {"cache_ttl_seconds": body.cache_ttl_seconds} if body.cache_ttl_seconds is not None else {}
+    await db.execute(insert(Biome).values(id=biome_id, planet_id=planet_id, galaxy_id=planet.galaxy_id, name=body.name, description=body.description, **ttl_kw))
     await db.commit()
     from app.services import sun_service
     await sun_service.update_planet_registry(planet.galaxy_id)
@@ -59,7 +60,11 @@ async def update_lifecycle(biome_id: str, body: BiomeLifecycleUpdate, user: User
 
 
 @router.get("/biomes/{biome_id}/graph", response_model=BiomeGraphResponse)
-async def get_biome_graph(biome_id: str, db: AsyncSession = Depends(get_db)):
+async def get_biome_graph(biome_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    biome = (await db.execute(select(Biome).where(Biome.id == biome_id))).scalar_one_or_none()
+    if not biome:
+        raise HTTPException(404, "Biome not found")
+    await permission_checker.require_planet_access(user, biome.planet_id, "read", db)
     stardust_rows = (await db.execute(select(Stardust).where(Stardust.biome_id == biome_id).limit(200))).scalars().all()
     nodes, edges = [], []
     stardust_ids = set()
@@ -90,7 +95,11 @@ async def get_biome_graph(biome_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/biomes/{biome_id}/entities", response_model=list[dict])
-async def get_biome_entities(biome_id: str, db: AsyncSession = Depends(get_db)):
+async def get_biome_entities(biome_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    biome = (await db.execute(select(Biome).where(Biome.id == biome_id))).scalar_one_or_none()
+    if not biome:
+        raise HTTPException(404, "Biome not found")
+    await permission_checker.require_planet_access(user, biome.planet_id, "read", db)
     stardust_ids = (await db.execute(select(Stardust.id).where(Stardust.biome_id == biome_id))).scalars().all()
     if not stardust_ids:
         return []

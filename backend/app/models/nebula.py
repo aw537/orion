@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import Text, Integer, Float, DateTime, ForeignKey, func
+import sqlalchemy as sa
+from sqlalchemy import Text, Integer, Float, DateTime, ForeignKey, Boolean, func
 from datetime import datetime
 from app.models.galaxy import Base
 
@@ -28,4 +29,4 @@ class InteractionLog(Base):
     confidence_delta: Mapped[float | None] = mapped_column(Float)
     latency_ms: Mapped[int | None] = mapped_column(Integer)
     cache_hit: Mapped[int | None] = mapped_column(Integer)
-    personal_data: Mapped[int] = mapped_column(Integer, server_default="0")
+    personal_data: Mapped[bool] = mapped_column(Boolean, server_default=sa.false())

@@ -25,6 +25,7 @@ class Stardust(Base):
     chroma_id: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     last_accessed: Mapped[datetime | None] = mapped_column(DateTime)
+    last_decayed_at: Mapped[datetime | None] = mapped_column(DateTime)
     access_count: Mapped[int] = mapped_column(Integer, server_default="0")
     reasoning: Mapped[str | None] = mapped_column(Text)
     supersedes: Mapped[list | None] = mapped_column(JSON)
@@ -35,6 +36,8 @@ class Stardust(Base):
             return []
         if isinstance(self._context_tags, list):
             return self._context_tags
+        # Fallback: rows written before the column was changed from Text→JSON
+        # may still contain a raw JSON string. Safe to remove once all rows are migrated.
         try:
             import json
             return json.loads(self._context_tags)

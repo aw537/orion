@@ -3,6 +3,8 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 import os
 
+# All tables are managed by Alembic migrations. There is no create_all() bypass
+# in app/database.py or app/main.py — autogenerate is authoritative.
 config = context.config
 
 if config.config_file_name is not None:

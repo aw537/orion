@@ -8,8 +8,15 @@ const formatDuration = (seconds: number) => {
 };
 
 export default function SettingsView() {
-  const { data: profiles } = useModelProfiles();
-  const { data: cacheCfg } = useCacheTTLConfig();
+  const { data: profiles, isLoading: profilesLoading, isError: profilesError } = useModelProfiles();
+  const { data: cacheCfg, isLoading: cacheCfgLoading, isError: cacheCfgError } = useCacheTTLConfig();
+
+  if (profilesLoading || cacheCfgLoading) {
+    return <div className="min-h-screen p-8 max-w-4xl mx-auto text-[var(--text-3)] text-sm">Loading settings…</div>;
+  }
+  if (profilesError || cacheCfgError) {
+    return <div className="min-h-screen p-8 max-w-4xl mx-auto text-[#F87171] text-sm">Failed to load settings. Please refresh the page.</div>;
+  }
 
   return (
     <div className="min-h-screen p-8 max-w-4xl mx-auto relative">

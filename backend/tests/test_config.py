@@ -58,3 +58,99 @@ class TestSettingsDefaults:
             s = Settings()
             assert s.EMBEDDING_PROVIDER == "google"
             assert s.GOOGLE_API_KEY == "test-key"
+
+
+class TestDeadCodeRemoved:
+    def test_region_reasoning_prompts_removed(self):
+        import app.config as cfg
+        assert not hasattr(cfg, "REGION_REASONING_PROMPTS"), \
+            "REGION_REASONING_PROMPTS should have been removed"
+
+    def test_ephemeral_secret_removed(self):
+        import inspect, app.auth.service as svc
+        src = inspect.getsource(svc)
+        assert "_EPHEMERAL_SECRET" not in src
+
+    def test_subagent_model_removed(self):
+        from app import models
+        assert not hasattr(models, "Subagent")
+        assert not hasattr(models, "SubagentSession")
+
+
+class TestStardustContextTagsNoDoubleparse:
+    def test_stardust_to_response_uses_hybrid_property_directly(self):
+        """_stardust_to_response must not re-parse tags; hybrid_property already returns list."""
+        import ast, inspect
+        from app.api import stardust as api_mod
+        src = inspect.getsource(api_mod._stardust_to_response)
+        tree = ast.parse(src)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                func = node.func
+                name = func.attr if isinstance(func, ast.Attribute) else (func.id if isinstance(func, ast.Name) else "")
+                assert name != "loads", "json.loads() found inside _stardust_to_response — remove it"
+
+
+class TestSettingsCache:
+    def test_clear_settings_cache_exists(self):
+        from app.config import clear_settings_cache
+        assert callable(clear_settings_cache)
+
+    def test_clear_settings_cache_resets_lru(self):
+        from app import config
+        s1 = config.get_settings()
+        config.clear_settings_cache()
+        s2 = config.get_settings()
+        # After clearing, a new Settings object is returned
+        assert s1 is not s2
+
+
+class TestRedisPassword:
+    def test_no_password_url_unchanged(self):
+        from app.storage.redis_client import _build_redis_url
+        url = _build_redis_url("redis://localhost:6379", "")
+        assert url == "redis://localhost:6379"
+
+    def test_password_injected_into_bare_url(self):
+        from app.storage.redis_client import _build_redis_url
+        url = _build_redis_url("redis://localhost:6379", "s3cr3t")
+        assert url == "redis://:s3cr3t@localhost:6379"
+
+    def test_password_not_doubled_if_already_in_url(self):
+        from app.storage.redis_client import _build_redis_url
+        url = _build_redis_url("redis://:existing@localhost:6379", "s3cr3t")
+        # URL already has credentials — leave it alone
+        assert url == "redis://:existing@localhost:6379"
+
+
+class TestFKConstraints:
+    def test_routing_log_galaxy_fk(self):
+        from app.models.routing_log import RoutingLog
+        fk_targets = {fk.column.table.name for fk in RoutingLog.__table__.c["galaxy_id"].foreign_keys}
+        assert "galaxies" in fk_targets, "routing_log.galaxy_id missing FK to galaxies"
+
+    def test_graph_path_cache_galaxy_fk(self):
+        from app.models.brain import GraphPathCache
+        fk_targets = {fk.column.table.name for fk in GraphPathCache.__table__.c["galaxy_id"].foreign_keys}
+        assert "galaxies" in fk_targets, "graph_path_cache.galaxy_id missing FK to galaxies"
+
+
+class TestBooleanColumns:
+    def test_model_types_are_bool(self):
+        from sqlalchemy import Boolean
+        from app.models.brain import TransitionOrientation, EntityRelationship
+        from app.models.contradiction import Contradiction
+        from app.models.nebula import InteractionLog
+        from app.models.profiles import ModelProfile
+
+        checks = [
+            (TransitionOrientation, "used"),
+            (EntityRelationship, "inferred"),
+            (Contradiction, "human_reviewed"),
+            (InteractionLog, "personal_data"),
+            (ModelProfile, "is_builtin"),
+        ]
+        for model_cls, col_name in checks:
+            col = model_cls.__table__.c[col_name]
+            assert isinstance(col.type, Boolean), \
+                f"{model_cls.__name__}.{col_name} should be Boolean, got {type(col.type).__name__}"

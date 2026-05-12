@@ -1,3 +1,4 @@
+import asyncio as _asyncio
 import hmac
 import logging
 import time
@@ -8,6 +9,8 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.storage.redis_client import get_redis, close_redis
 from app.config import get_settings
+from app.database import async_session
+from app.auth.service import prune_expired_sessions
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s [%(name)s] %(message)s")
 logger = logging.getLogger("orion")
@@ -40,7 +43,11 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Simple sliding-window rate limiter. 120 requests per minute per client IP."""
+    """Simple sliding-window rate limiter. 120 requests per minute per client IP.
+
+    This in-process dict is safe for single-worker asyncio (no await between reads and writes).
+    For multi-worker deployments, replace with a Redis-backed limiter.
+    """
     WINDOW = 60
     MAX_REQUESTS = 120
     EVICTION_INTERVAL = 300  # evict stale entries every 5 minutes
@@ -70,17 +77,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-import asyncio as _asyncio
-
-
 async def _session_prune_loop():
     """Background task: prune expired UserSession rows once per hour."""
-    from app.database import async_session as _async_session
-    from app.auth.service import prune_expired_sessions
     while True:
         await _asyncio.sleep(3600)
         try:
-            async with _async_session() as db:
+            async with async_session() as db:
                 n = await prune_expired_sessions(db)
                 if n:
                     logger.info(f"Pruned {n} expired session(s)")
@@ -130,7 +132,6 @@ from app.api import contradictions as contradictions_api
 from app.api import synthesis as synthesis_api
 from app.api import ask as ask_api
 from app.api import admin as admin_api
-from app.api import merge as merge_api
 from app.api import brain as brain_api
 from app.api import routing as routing_api
 from app.api import inbox as inbox_api
@@ -154,7 +155,6 @@ app.include_router(contradictions_api.router)
 app.include_router(synthesis_api.router)
 app.include_router(ask_api.router)
 app.include_router(admin_api.router)
-app.include_router(merge_api.router)
 app.include_router(brain_api.router)
 app.include_router(routing_api.router)
 app.include_router(inbox_api.router)

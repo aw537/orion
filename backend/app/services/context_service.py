@@ -10,12 +10,19 @@ from app.schemas.stardust import ContextBundle, RetrievalMetadata
 
 logger = logging.getLogger(__name__)
 
-# Rough token estimate: ~4 chars per token
-CHARS_PER_TOKEN = 4
-
-
 def _estimate_tokens(text: str) -> int:
-    return len(text) // CHARS_PER_TOKEN
+    """Estimate token count. Blends word-count and char-count heuristics to handle
+    code (short tokens) and prose (longer tokens) more accurately than a flat 4 chars/token."""
+    words = len(text.split())
+    chars = len(text)
+    # Word-based: ~0.75 tokens per word (GPT-4 average for English prose)
+    word_estimate = int(words * 0.75)
+    # Char-based: ~4 chars per token (fallback for dense text / code)
+    char_estimate = chars // 4
+    # Average of both, biased toward word-based when we have enough words
+    if words > 10:
+        return (word_estimate * 2 + char_estimate) // 3
+    return char_estimate
 
 
 def _stardust_to_dict(s) -> dict:
@@ -43,7 +50,15 @@ async def build_context(
         sections = (await db.execute(select(SunSection).where(SunSection.galaxy_id == galaxy_id))).scalars().all()
         sun_data = {}
         for s in sections:
-            sun_data[s.section_key] = s.content if isinstance(s.content, dict) else (json.loads(s.content) if s.content else {})
+            if isinstance(s.content, dict):
+                sun_data[s.section_key] = s.content
+            elif s.content:
+                try:
+                    sun_data[s.section_key] = json.loads(s.content)
+                except json.JSONDecodeError:
+                    sun_data[s.section_key] = {}
+            else:
+                sun_data[s.section_key] = {}
         sun_context = {
             "core_values": sun_data.get("values", []),
             "agent_protocol": sun_data.get("agent_protocol", []),

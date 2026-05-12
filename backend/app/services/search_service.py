@@ -16,6 +16,15 @@ logger = logging.getLogger(__name__)
 RRF_K = 60
 
 
+def _parse_dt(value: str | None) -> datetime | None:
+    if not value or value == "null":
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except (ValueError, TypeError):
+        return None
+
+
 def _rrf_fuse(rankings: list[list[dict]], k: int = RRF_K) -> list[dict]:
     """Reciprocal Rank Fusion across multiple ranked lists."""
     scores: dict[str, float] = defaultdict(float)
@@ -157,7 +166,8 @@ async def search(
                 if region:
                     q = q.where(Stardust.region == region)
                 if terms:
-                    q = q.where(or_(*[Stardust.content.ilike(f"%{t}%") for t in terms]))
+                    escaped = [t.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") for t in terms]
+                    q = q.where(or_(*[Stardust.content.ilike(f"%{t}%", escape="\\") for t in escaped]))
                 rows = (await db.execute(q.order_by(Stardust.confidence.desc()).limit(limit))).scalars().all()
                 for s in rows:
                     all_records.append({
@@ -217,7 +227,7 @@ async def search(
             records.append(SearchRecord(
                 id=sid, content=content, region=doc.get("region", meta.get("region", "contextual")),
                 biome_name=biome_n, planet_name=planet_n, confidence=conf,
-                valid_from=datetime.fromisoformat(meta["valid_from"]) if meta.get("valid_from") and meta["valid_from"] != "null" else datetime.now(timezone.utc).replace(tzinfo=None),
+                valid_from=_parse_dt(meta.get("valid_from")) or datetime.now(timezone.utc).replace(tzinfo=None),
                 valid_until=None, context_tags=tags,
                 source_agent=meta.get("source_agent", doc.get("source_agent")),
                 access_count=int(meta.get("access_count", doc.get("access_count", 0))),

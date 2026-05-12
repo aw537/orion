@@ -13,6 +13,8 @@ from sqlalchemy import select, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Galaxy, Planet, Biome, Stardust, Entity
+from app.models.user import User
+from app.auth.dependencies import get_current_user
 from app.services import nebula_service, sun_service
 from app.storage.chroma_client import ChromaClient, get_chroma_client
 
@@ -131,7 +133,7 @@ class OnboardingResponse(BaseModel):
 
 
 @router.post("/start", response_model=OnboardingResponse)
-async def start_onboarding(body: OnboardingRequest, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+async def start_onboarding(body: OnboardingRequest, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     existing = (await db.execute(select(Galaxy).limit(1))).scalar_one_or_none()
     if existing:
         # Galaxy already exists — trigger import if a path was provided, then return existing state
@@ -424,7 +426,7 @@ def _validate_import_path(path: str) -> str:
     """Resolve and validate an import path. Rejects paths outside safe directories."""
     resolved = os.path.realpath(os.path.expanduser(path))
     if not os.path.isdir(resolved):
-        raise HTTPException(400, f"Import path is not a directory: {path}")
+        raise HTTPException(400, "Invalid import path")
     if not _is_safe_path(resolved):
         raise HTTPException(403, "Import path is outside allowed directories")
     return resolved
@@ -450,7 +452,7 @@ def _read_steering_doc(path: str | None) -> str | None:
 
 
 @router.post("/import")
-async def import_markdown(planet_id: str, path: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+async def import_markdown(planet_id: str, path: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     resolved = _validate_import_path(path)
     galaxy = (await db.execute(select(Galaxy).limit(1))).scalar_one_or_none()
     if not galaxy:
@@ -468,6 +470,7 @@ async def import_uploaded_files(
     galaxy_id: str,
     files: list[UploadFile] = File(...),
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Accept markdown files uploaded directly from the browser (no filesystem path needed)."""
     galaxy = (await db.execute(select(Galaxy).where(Galaxy.id == galaxy_id))).scalar_one_or_none()
