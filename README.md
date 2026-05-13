@@ -1,6 +1,6 @@
 # Orion — Persistent Memory & Brain for AI Agents
 
-https://orion-six-chi.vercel.app/
+https://www.starmemory.ai
 
 Orion gives AI agents persistent memory across sessions. It runs locally via Docker — no cloud, no subscriptions, your data stays on your machine.
 
